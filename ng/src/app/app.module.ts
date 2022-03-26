@@ -35,6 +35,8 @@ import { GongModule } from 'gong'
 import { GongmarkdownModule } from 'gongmarkdown'
 import { GongmarkdownspecificModule } from 'gongmarkdownspecific'
 
+import { MarkdownModule, MarkedOptions } from 'ngx-markdown';
+
 // mandatory
 import { HttpClientModule } from '@angular/common/http';
 
@@ -74,7 +76,9 @@ import { HttpClientModule } from '@angular/common/http';
     GongdocdiagramsModule,
 
     GongmarkdownModule,
-    GongmarkdownspecificModule
+    GongmarkdownspecificModule,
+
+    MarkdownModule
   ],
   providers: [],
   bootstrap: [AppComponent]
