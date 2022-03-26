@@ -13,3 +13,5 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+go/cmd/gongmarkdown/gongmarkdown
+go/cmd/gongmarkdown/test.db
