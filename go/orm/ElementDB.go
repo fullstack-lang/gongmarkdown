@@ -69,6 +69,10 @@ type ElementDB struct {
 
 	// Declation for basic field elementDB.Content {{BasicKind}} (to be completed)
 	Content_Data sql.NullString
+
+	// Declation for basic field elementDB.IsTitle bool (to be completed)
+	// provide the sql storage for the boolan
+	IsTitle_Data sql.NullBool
 	// encoding of pointers
 	ElementPointersEnconding
 }
@@ -93,6 +97,8 @@ type ElementWOP struct {
 	Name string `xlsx:"1"`
 
 	Content string `xlsx:"2"`
+
+	IsTitle bool `xlsx:"3"`
 	// insertion for WOP pointer fields
 }
 
@@ -101,6 +107,7 @@ var Element_Fields = []string{
 	"ID",
 	"Name",
 	"Content",
+	"IsTitle",
 }
 
 type BackRepoElementStruct struct {
@@ -433,6 +440,9 @@ func (elementDB *ElementDB) CopyBasicFieldsFromElement(element *models.Element) 
 
 	elementDB.Content_Data.String = element.Content
 	elementDB.Content_Data.Valid = true
+
+	elementDB.IsTitle_Data.Bool = element.IsTitle
+	elementDB.IsTitle_Data.Valid = true
 }
 
 // CopyBasicFieldsFromElementWOP
@@ -444,6 +454,9 @@ func (elementDB *ElementDB) CopyBasicFieldsFromElementWOP(element *ElementWOP) {
 
 	elementDB.Content_Data.String = element.Content
 	elementDB.Content_Data.Valid = true
+
+	elementDB.IsTitle_Data.Bool = element.IsTitle
+	elementDB.IsTitle_Data.Valid = true
 }
 
 // CopyBasicFieldsToElement
@@ -451,6 +464,7 @@ func (elementDB *ElementDB) CopyBasicFieldsToElement(element *models.Element) {
 	// insertion point for checkout of basic fields (back repo to stage)
 	element.Name = elementDB.Name_Data.String
 	element.Content = elementDB.Content_Data.String
+	element.IsTitle = elementDB.IsTitle_Data.Bool
 }
 
 // CopyBasicFieldsToElementWOP
@@ -459,6 +473,7 @@ func (elementDB *ElementDB) CopyBasicFieldsToElementWOP(element *ElementWOP) {
 	// insertion point for checkout of basic fields (back repo to stage)
 	element.Name = elementDB.Name_Data.String
 	element.Content = elementDB.Content_Data.String
+	element.IsTitle = elementDB.IsTitle_Data.Bool
 }
 
 // Backup generates a json file from a slice of all ElementDB instances in the backrepo

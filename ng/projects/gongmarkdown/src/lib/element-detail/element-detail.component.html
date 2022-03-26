@@ -41,6 +41,9 @@
         <textarea name="" [ngModelOptions]="{standalone: true}" matInput [(ngModel)]="element.Content"></textarea>
     </mat-form-field>
 
+    <!-- -->
+    <mat-checkbox [formControl]="IsTitleFormControl">IsTitle</mat-checkbox>
+
     <mat-grid-list cols="5" rowHeight="2:1">
         <mat-grid-tile [colspan]="3">
             <button mat-raised-button (click)="openReverseSelection('Element', 'Element_SubElementsDBID', 'ONE_MANY_ASSOCIATION_MODE', '', '', '')">SubElements</button>

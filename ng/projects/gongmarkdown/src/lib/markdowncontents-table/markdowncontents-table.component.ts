@@ -74,6 +74,9 @@ export class MarkdownContentsTableComponent implements OnInit {
         case 'Content':
           return markdowncontentDB.Content;
 
+        case 'Root':
+          return (markdowncontentDB.Root ? markdowncontentDB.Root.Name : '');
+
         default:
           console.assert(false, "Unknown field")
           return "";
@@ -90,6 +93,9 @@ export class MarkdownContentsTableComponent implements OnInit {
       // insertion point for merging of fields
       mergedContent += markdowncontentDB.Name.toLowerCase()
       mergedContent += markdowncontentDB.Content.toLowerCase()
+      if (markdowncontentDB.Root) {
+        mergedContent += markdowncontentDB.Root.Name.toLowerCase()
+      }
 
       let isSelected = mergedContent.includes(filter.toLowerCase())
       return isSelected
@@ -142,11 +148,13 @@ export class MarkdownContentsTableComponent implements OnInit {
       this.displayedColumns = ['ID', 'Edit', 'Delete', // insertion point for columns to display
         "Name",
         "Content",
+        "Root",
       ]
     } else {
       this.displayedColumns = ['select', 'ID', // insertion point for columns to display
         "Name",
         "Content",
+        "Root",
       ]
       this.selection = new SelectionModel<MarkdownContentDB>(allowMultiSelect, this.initialSelection);
     }

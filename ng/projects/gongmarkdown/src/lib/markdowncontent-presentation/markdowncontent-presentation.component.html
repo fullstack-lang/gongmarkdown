@@ -16,6 +16,10 @@
         <td class="mat-cell">Content</td>
         <td class="mat-cell">{{markdowncontent.Content}}</td>
     </tr>
+    <tr class="mat-row">
+        <td class="mat-cell">Root</td>
+        <td class="mat-cell">{{markdowncontent.Root ? markdowncontent.Root.Name : ""}}</td>
+    </tr>
 </table>
 <!-- hack to force loading of mat table style an error is generated but it is a know angular issue https://github.com/angular/components/issues/10941 -->
 <table mat-table [dataSource]="dataSource" class="mat-elevation-z8">

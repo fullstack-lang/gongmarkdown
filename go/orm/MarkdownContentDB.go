@@ -45,6 +45,10 @@ type MarkdownContentAPI struct {
 // reverse pointers of slice of poitners to Struct
 type MarkdownContentPointersEnconding struct {
 	// insertion for pointer fields encoding declaration
+
+	// field Root is a pointer to another Struct (optional or 0..1)
+	// This field is generated into another field to enable AS ONE association
+	RootID sql.NullInt64
 }
 
 // MarkdownContentDB describes a markdowncontent in the database
@@ -238,6 +242,15 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseTwoInst
 		markdowncontentDB.CopyBasicFieldsFromMarkdownContent(markdowncontent)
 
 		// insertion point for translating pointers encodings into actual pointers
+		// commit pointer value markdowncontent.Root translates to updating the markdowncontent.RootID
+		markdowncontentDB.RootID.Valid = true // allow for a 0 value (nil association)
+		if markdowncontent.Root != nil {
+			if RootId, ok := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[markdowncontent.Root]; ok {
+				markdowncontentDB.RootID.Int64 = int64(RootId)
+				markdowncontentDB.RootID.Valid = true
+			}
+		}
+
 		query := backRepoMarkdownContent.db.Save(&markdowncontentDB)
 		if query.Error != nil {
 			return query.Error
@@ -343,6 +356,10 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseTwoIn
 	_ = markdowncontent // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
 
 	// insertion point for checkout of pointer encoding
+	// Root field
+	if markdowncontentDB.RootID.Int64 != 0 {
+		markdowncontent.Root = (*backRepo.BackRepoElement.Map_ElementDBID_ElementPtr)[uint(markdowncontentDB.RootID.Int64)]
+	}
 	return
 }
 
@@ -564,6 +581,12 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestorePhaseTwo() 
 		_ = markdowncontentDB
 
 		// insertion point for reindexing pointers encoding
+		// reindexing Root field
+		if markdowncontentDB.RootID.Int64 != 0 {
+			markdowncontentDB.RootID.Int64 = int64(BackRepoElementid_atBckpTime_newID[uint(markdowncontentDB.RootID.Int64)])
+			markdowncontentDB.RootID.Valid = true
+		}
+
 		// update databse with new index encoding
 		query := backRepoMarkdownContent.db.Model(markdowncontentDB).Updates(*markdowncontentDB)
 		if query.Error != nil {

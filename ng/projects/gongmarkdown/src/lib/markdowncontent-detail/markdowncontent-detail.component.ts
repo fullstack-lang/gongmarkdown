@@ -134,6 +134,16 @@ export class MarkdownContentDetailComponent implements OnInit {
 		// pointers fields, after the translation, are nulled in order to perform serialization
 
 		// insertion point for translation/nullation of each field
+		if (this.markdowncontent.RootID == undefined) {
+			this.markdowncontent.RootID = new NullInt64
+		}
+		if (this.markdowncontent.Root != undefined) {
+			this.markdowncontent.RootID.Int64 = this.markdowncontent.Root.ID
+			this.markdowncontent.RootID.Valid = true
+		} else {
+			this.markdowncontent.RootID.Int64 = 0
+			this.markdowncontent.RootID.Valid = true
+		}
 
 		// save from the front pointer space to the non pointer space for serialization
 

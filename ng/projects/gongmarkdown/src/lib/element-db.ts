@@ -11,6 +11,7 @@ export class ElementDB {
 	// insertion point for basic fields declarations
 	Name: string = ""
 	Content: string = ""
+	IsTitle: boolean = false
 
 	// insertion point for other declarations
 	SubElements?: Array<ElementDB>

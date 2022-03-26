@@ -162,23 +162,12 @@ func main() {
 	gong_controllers.RegisterControllers(r)
 	gongdoc_models.Stage.Commit()
 
-	markdownContent := (&models.MarkdownContent{Name: "Singloton"}).Stage()
-	markdownContent.Content = "# markdown title"
-
-	rootElement := (&models.Element{Name: "Root Element"}).Stage()
-	rootElement.Content = ""
-
-	chapter1 := (&models.Element{Name: "Singloton"}).Stage()
-	chapter1.Content = "Title of chapter 1"
-
-	chapter1_1 := (&models.Element{Name: "Singloton"}).Stage()
-	chapter1_1.Content = "Title of chapter 1.1"
-
-	paragraph_in_1_1 := (&models.Element{Name: "Singloton"}).Stage()
-	paragraph_in_1_1.Content = "Content of chapter 1 1"
-
-	chapter2 := (&models.Element{Name: "Singloton"}).Stage()
-	chapter2.Content = "Title of chapter 2"
+	// fetch the document singloton
+	var singloton *models.MarkdownContent
+	for s := range models.Stage.MarkdownContents {
+		singloton = s
+	}
+	singloton.UpdateContent()
 
 	models.Stage.Commit()
 

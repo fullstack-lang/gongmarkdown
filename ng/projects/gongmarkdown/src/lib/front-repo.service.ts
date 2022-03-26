@@ -235,6 +235,13 @@ export class FrontRepoService {
             markdowncontents.forEach(
               markdowncontent => {
                 // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
+                // insertion point for pointer field Root redeeming
+                {
+                  let _element = FrontRepoSingloton.Elements.get(markdowncontent.RootID.Int64)
+                  if (_element) {
+                    markdowncontent.Root = _element
+                  }
+                }
 
                 // insertion point for redeeming ONE-MANY associations
               }
@@ -339,6 +346,13 @@ export class FrontRepoService {
                 FrontRepoSingloton.MarkdownContents_batch.set(markdowncontent.ID, markdowncontent)
 
                 // insertion point for redeeming ONE/ZERO-ONE associations
+                // insertion point for pointer field Root redeeming
+                {
+                  let _element = FrontRepoSingloton.Elements.get(markdowncontent.RootID.Int64)
+                  if (_element) {
+                    markdowncontent.Root = _element
+                  }
+                }
 
                 // insertion point for redeeming ONE-MANY associations
               }

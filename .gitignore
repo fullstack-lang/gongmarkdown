@@ -15,3 +15,4 @@
 # vendor/
 go/cmd/gongmarkdown/gongmarkdown
 go/cmd/gongmarkdown/test.db
+go/cmd/gongmarkdown/__debug_bin

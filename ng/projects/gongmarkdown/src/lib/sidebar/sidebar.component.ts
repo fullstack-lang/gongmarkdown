@@ -312,6 +312,41 @@ export class SidebarComponent implements OnInit {
           markdowncontentGongNodeStruct.children!.push(markdowncontentGongNodeInstance)
 
           // insertion point for per field code
+          /**
+          * let append a node for the association Root
+          */
+          let RootGongNodeAssociation: GongNode = {
+            name: "(Element) Root",
+            type: GongNodeType.ONE__ZERO_ONE_ASSOCIATION,
+            id: markdowncontentDB.ID,
+            uniqueIdPerStack: 17 * nonInstanceNodeId,
+            structName: "MarkdownContent",
+            associationField: "Root",
+            associatedStructName: "Element",
+            children: new Array<GongNode>()
+          }
+          nonInstanceNodeId = nonInstanceNodeId + 1
+          markdowncontentGongNodeInstance.children!.push(RootGongNodeAssociation)
+
+          /**
+            * let append a node for the instance behind the asssociation Root
+            */
+          if (markdowncontentDB.Root != undefined) {
+            let markdowncontentGongNodeInstance_Root: GongNode = {
+              name: markdowncontentDB.Root.Name,
+              type: GongNodeType.INSTANCE,
+              id: markdowncontentDB.Root.ID,
+              uniqueIdPerStack: // godel numbering (thank you kurt)
+                3 * getMarkdownContentUniqueID(markdowncontentDB.ID)
+                + 5 * getElementUniqueID(markdowncontentDB.Root.ID),
+              structName: "Element",
+              associationField: "",
+              associatedStructName: "",
+              children: new Array<GongNode>()
+            }
+            RootGongNodeAssociation.children.push(markdowncontentGongNodeInstance_Root)
+          }
+
         }
       )
 

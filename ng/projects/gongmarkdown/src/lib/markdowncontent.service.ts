@@ -14,6 +14,7 @@ import { catchError, map, tap } from 'rxjs/operators';
 import { MarkdownContentDB } from './markdowncontent-db';
 
 // insertion point for imports
+import { ElementDB } from './element-db'
 
 @Injectable({
   providedIn: 'root'
@@ -70,6 +71,7 @@ export class MarkdownContentService {
   postMarkdownContent(markdowncontentdb: MarkdownContentDB): Observable<MarkdownContentDB> {
 
     // insertion point for reset of pointers and reverse pointers (to avoid circular JSON)
+    markdowncontentdb.Root = new ElementDB
 
     return this.http.post<MarkdownContentDB>(this.markdowncontentsUrl, markdowncontentdb, this.httpOptions).pipe(
       tap(_ => {
@@ -97,6 +99,7 @@ export class MarkdownContentService {
     const url = `${this.markdowncontentsUrl}/${id}`;
 
     // insertion point for reset of pointers and reverse pointers (to avoid circular JSON)
+    markdowncontentdb.Root = new ElementDB
 
     return this.http.put<MarkdownContentDB>(url, markdowncontentdb, this.httpOptions).pipe(
       tap(_ => {

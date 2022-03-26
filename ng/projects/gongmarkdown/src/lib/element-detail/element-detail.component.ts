@@ -34,6 +34,7 @@ enum ElementDetailComponentState {
 export class ElementDetailComponent implements OnInit {
 
 	// insertion point for declarations
+	IsTitleFormControl = new FormControl(false);
 
 	// the ElementDB of interest
 	element: ElementDB = new ElementDB
@@ -131,6 +132,7 @@ export class ElementDetailComponent implements OnInit {
 				}
 
 				// insertion point for recovery of form controls value for bool fields
+				this.IsTitleFormControl.setValue(this.element.IsTitle)
 			}
 		)
 
@@ -143,6 +145,7 @@ export class ElementDetailComponent implements OnInit {
 		// pointers fields, after the translation, are nulled in order to perform serialization
 
 		// insertion point for translation/nullation of each field
+		this.element.IsTitle = this.IsTitleFormControl.value
 
 		// save from the front pointer space to the non pointer space for serialization
 

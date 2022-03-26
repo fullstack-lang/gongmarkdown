@@ -44,7 +44,9 @@
             "mode": "debug",
             "program": "${workspaceFolder}/go/cmd/gongmarkdown",
             "args": [
-                "-diagrams=false"
+                "-diagrams=false",
+                "-unmarshall=stage",
+                "-marshallOnCommit=stage",
             ]
         },
         {
@@ -54,6 +56,8 @@
             "mode": "debug",
             "program": "${workspaceFolder}/go/cmd/gongmarkdown",
             "args": [
+                "-unmarshall=stage",
+                "-marshallOnCommit=stage",
             ]
         },
     ]

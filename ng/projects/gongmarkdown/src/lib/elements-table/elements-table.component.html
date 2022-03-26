@@ -33,6 +33,13 @@
             </td>
         </ng-container>
         <!-- -->
+        <ng-container matColumnDef="IsTitle">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> IsTitle </th>
+            <td mat-cell *matCellDef="let Element">
+                <mat-checkbox [checked]="Element.IsTitle" disabled=true></mat-checkbox>
+            </td>
+        </ng-container>
+        <!-- -->
         <ng-container matColumnDef="Element_SubElements">
             <th mat-header-cell *matHeaderCellDef mat-sort-header> <-- (Element) SubElements </th>
             <td mat-cell *matCellDef="let element">

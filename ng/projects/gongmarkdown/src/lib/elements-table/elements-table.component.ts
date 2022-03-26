@@ -74,6 +74,9 @@ export class ElementsTableComponent implements OnInit {
         case 'Content':
           return elementDB.Content;
 
+        case 'IsTitle':
+          return elementDB.IsTitle?"true":"false";
+
         case 'Element_SubElements':
           return this.frontRepo.Elements.get(elementDB.Element_SubElementsDBID.Int64)!.Name;
 
@@ -149,12 +152,14 @@ export class ElementsTableComponent implements OnInit {
       this.displayedColumns = ['ID', 'Edit', 'Delete', // insertion point for columns to display
         "Name",
         "Content",
+        "IsTitle",
         "Element_SubElements",
       ]
     } else {
       this.displayedColumns = ['select', 'ID', // insertion point for columns to display
         "Name",
         "Content",
+        "IsTitle",
         "Element_SubElements",
       ]
       this.selection = new SelectionModel<ElementDB>(allowMultiSelect, this.initialSelection);
