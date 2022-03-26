@@ -33,6 +33,7 @@ import { GongdocdiagramsModule } from 'gongdocdiagrams'
 import { GongModule } from 'gong'
 
 import { GongmarkdownModule } from 'gongmarkdown'
+import { GongmarkdownspecificModule } from 'gongmarkdownspecific'
 
 // mandatory
 import { HttpClientModule } from '@angular/common/http';
@@ -72,7 +73,8 @@ import { HttpClientModule } from '@angular/common/http';
     GongdocModule,
     GongdocdiagramsModule,
 
-    GongmarkdownModule
+    GongmarkdownModule,
+    GongmarkdownspecificModule
   ],
   providers: [],
   bootstrap: [AppComponent]

@@ -29,4 +29,35 @@
 					}
 				}
 			}
+		},
+		"gongmarkdownspecific": {
+			"projectType": "library",
+			"root": "projects/gongmarkdownspecific",
+			"sourceRoot": "projects/gongmarkdownspecific/src",
+			"prefix": "lib",
+			"architect": {
+				"build": {
+					"builder": "@angular-devkit/build-angular:ng-packagr",
+					"options": {
+						"project": "projects/gongmarkdownspecific/ng-package.json"
+					},
+					"configurations": {
+						"production": {
+							"tsConfig": "projects/gongmarkdownspecific/tsconfig.lib.prod.json"
+						},
+						"development": {
+							"tsConfig": "projects/gongmarkdownspecific/tsconfig.lib.json"
+						}
+					},
+					"defaultConfiguration": "production"
+				},
+				"test": {
+					"builder": "@angular-devkit/build-angular:karma",
+					"options": {
+						"main": "projects/gongmarkdownspecific/src/test.ts",
+						"tsConfig": "projects/gongmarkdownspecific/tsconfig.spec.json",
+						"karmaConfig": "projects/gongmarkdownspecific/karma.conf.js"
+					}
+				}
+			}
 		}},"version":1}
