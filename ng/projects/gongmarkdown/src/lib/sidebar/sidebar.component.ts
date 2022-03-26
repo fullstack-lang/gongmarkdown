@@ -8,6 +8,8 @@ import { FrontRepoService, FrontRepo } from '../front-repo.service'
 import { CommitNbService } from '../commitnb.service'
 
 // insertion point for per struct import code
+import { MarkdownContentService } from '../markdowncontent.service'
+import { getMarkdownContentUniqueID } from '../front-repo.service'
 import { ParagraphService } from '../paragraph.service'
 import { getParagraphUniqueID } from '../front-repo.service'
 
@@ -145,6 +147,7 @@ export class SidebarComponent implements OnInit {
     private commitNbService: CommitNbService,
 
     // insertion point for per struct service declaration
+    private markdowncontentService: MarkdownContentService,
     private paragraphService: ParagraphService,
   ) { }
 
@@ -152,6 +155,14 @@ export class SidebarComponent implements OnInit {
     this.refresh()
 
     // insertion point for per struct observable for refresh trigger
+    // observable for changes in structs
+    this.markdowncontentService.MarkdownContentServiceChanged.subscribe(
+      message => {
+        if (message == "post" || message == "update" || message == "delete") {
+          this.refresh()
+        }
+      }
+    )
     // observable for changes in structs
     this.paragraphService.ParagraphServiceChanged.subscribe(
       message => {
@@ -184,6 +195,50 @@ export class SidebarComponent implements OnInit {
       this.gongNodeTree = new Array<GongNode>();
       
       // insertion point for per struct tree construction
+      /**
+      * fill up the MarkdownContent part of the mat tree
+      */
+      let markdowncontentGongNodeStruct: GongNode = {
+        name: "MarkdownContent",
+        type: GongNodeType.STRUCT,
+        id: 0,
+        uniqueIdPerStack: 13 * nonInstanceNodeId,
+        structName: "MarkdownContent",
+        associationField: "",
+        associatedStructName: "",
+        children: new Array<GongNode>()
+      }
+      nonInstanceNodeId = nonInstanceNodeId + 1
+      this.gongNodeTree.push(markdowncontentGongNodeStruct)
+
+      this.frontRepo.MarkdownContents_array.sort((t1, t2) => {
+        if (t1.Name > t2.Name) {
+          return 1;
+        }
+        if (t1.Name < t2.Name) {
+          return -1;
+        }
+        return 0;
+      });
+
+      this.frontRepo.MarkdownContents_array.forEach(
+        markdowncontentDB => {
+          let markdowncontentGongNodeInstance: GongNode = {
+            name: markdowncontentDB.Name,
+            type: GongNodeType.INSTANCE,
+            id: markdowncontentDB.ID,
+            uniqueIdPerStack: getMarkdownContentUniqueID(markdowncontentDB.ID),
+            structName: "MarkdownContent",
+            associationField: "",
+            associatedStructName: "",
+            children: new Array<GongNode>()
+          }
+          markdowncontentGongNodeStruct.children!.push(markdowncontentGongNodeInstance)
+
+          // insertion point for per field code
+        }
+      )
+
       /**
       * fill up the Paragraph part of the mat tree
       */

@@ -34,15 +34,14 @@ import (
 )
 
 var (
-	logDBFlag         = flag.Bool("logDB", false, "log mode for db")
-	logGINFlag        = flag.Bool("logGIN", false, "log mode for gin")
+	logDBFlag  = flag.Bool("logDB", false, "log mode for db")
+	logGINFlag = flag.Bool("logGIN", false, "log mode for gin")
 
 	marshallOnStartup = flag.String("marshallOnStartup", "", "at startup, marshall staged data to a go file with the marshall name and '.go' (must be lowercased without spaces). If marshall arg is '', no marshalling")
 	unmarshall        = flag.String("unmarshall", "", "unmarshall data from marshall name and '.go' (must be lowercased without spaces), If unmarshall arg is '', no unmarshalling")
 	marshallOnCommit  = flag.String("marshallOnCommit", "", "on all commits, marshall staged data to a go file with the marshall name and '.go' (must be lowercased without spaces). If marshall arg is '', no marshalling")
 
 	diagrams = flag.Bool("diagrams", true, "parse/analysis go/models and go/diagrams (takes a few seconds)")
-
 )
 
 // InjectionGateway is the singloton that stores all functions
@@ -65,7 +64,6 @@ func (impl *BeforeCommitImplementation) BeforeCommit(stage *models.StageStruct) 
 	models.Stage.Marshall(file, "gongmarkdown/go/models", "main")
 }
 
-
 func main() {
 
 	log.SetPrefix("gongmarkdown: ")
@@ -83,26 +81,13 @@ func main() {
 	r.Use(cors.Default())
 
 	// setup GORM
-	db := orm.SetupModels(*logDBFlag, "./test.db")
-	dbDB, err := db.DB()
-	
-	//
-	// gong and gongdoc databases do not need to be persisted.
-	// therefore, they are in memory
-	//
-	db_inMemory := gong_orm.SetupModels(*logDBFlag, ":memory:")
-
-	// since gongsim is a multi threaded application. It is important to set up
-	// only one open connexion at a time
-	dbDB_inMemory, err := db_inMemory.DB()
-	if err != nil {
-		panic("cannot access DB of db" + err.Error())
-	}
-	// it is mandatory to allow parallel access, otherwise, bizarre errors occurs
-	dbDB_inMemory.SetMaxOpenConns(1)
+	db := orm.SetupModels(*logDBFlag, ":memory:")
+	dbDB, _ := db.DB()
+	dbDB.SetMaxOpenConns(1)
 
 	// add gongdocatabase
-	gongdoc_orm.AutoMigrate(db_inMemory)
+	gongdoc_orm.AutoMigrate(db)
+	gong_orm.AutoMigrate(db)
 
 	// generate injection code from the stage
 	if *marshallOnStartup != "" {
@@ -142,13 +127,6 @@ func main() {
 		models.Stage.OnInitCommitFromFrontCallback = hook
 	}
 
-	// since the stack can be a multi threaded application. It is important to set up
-	// only one open connexion at a time
-	if err != nil {
-		panic("cannot access DB of db" + err.Error())
-	}
-	dbDB.SetMaxOpenConns(1)
-
 	if *diagrams {
 		// load package to analyse
 		modelPkg := &gong_models.ModelPkg{}
@@ -183,7 +161,10 @@ func main() {
 	gongdoc_controllers.RegisterControllers(r)
 	gong_controllers.RegisterControllers(r)
 	gongdoc_models.Stage.Commit()
-	gong_models.Stage.Commit()
+
+	markdownContent := (&models.MarkdownContent{Name: "Singloton"}).Stage()
+	markdownContent.Content = "# markdown title"
+	models.Stage.Commit()
 
 	// provide the static route for the angular pages
 	r.Use(static.Serve("/", EmbedFolder(gongmarkdown.NgDistNg, "ng/dist/ng")))

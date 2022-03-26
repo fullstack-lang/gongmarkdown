@@ -14,6 +14,13 @@ export * from './lib/commitnb.service'
 export * from './lib/push_from_front_nb.service'
 
 
+export * from './lib/markdowncontent-detail/markdowncontent-detail.component'
+export * from './lib/markdowncontent-presentation/markdowncontent-presentation.component'
+export * from './lib/markdowncontent-sorting/markdowncontent-sorting.component'
+export * from './lib/markdowncontents-table/markdowncontents-table.component'
+export * from './lib/markdowncontent-db'
+export * from './lib/markdowncontent.service'
+
 export * from './lib/paragraph-detail/paragraph-detail.component'
 export * from './lib/paragraph-presentation/paragraph-presentation.component'
 export * from './lib/paragraph-sorting/paragraph-sorting.component'

@@ -13,5 +13,5 @@ export class AppComponent {
   default = 'Default view'
   diagrams = 'Diagrams view'
   meta = 'Meta view'
-  views: string[] = [this.markdown, this.text, this.default, this.diagrams, this.meta];
+  views: string[] = [this.markdown, this.default, this.diagrams, this.meta];
 }

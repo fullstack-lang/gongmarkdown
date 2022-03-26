@@ -38,6 +38,11 @@ import { SplitterComponent } from './splitter/splitter.component'
 import { SidebarComponent } from './sidebar/sidebar.component';
 
 // insertion point for imports 
+import { MarkdownContentsTableComponent } from './markdowncontents-table/markdowncontents-table.component'
+import { MarkdownContentSortingComponent } from './markdowncontent-sorting/markdowncontent-sorting.component'
+import { MarkdownContentDetailComponent } from './markdowncontent-detail/markdowncontent-detail.component'
+import { MarkdownContentPresentationComponent } from './markdowncontent-presentation/markdowncontent-presentation.component'
+
 import { ParagraphsTableComponent } from './paragraphs-table/paragraphs-table.component'
 import { ParagraphSortingComponent } from './paragraph-sorting/paragraph-sorting.component'
 import { ParagraphDetailComponent } from './paragraph-detail/paragraph-detail.component'
@@ -47,6 +52,11 @@ import { ParagraphPresentationComponent } from './paragraph-presentation/paragra
 @NgModule({
 	declarations: [
 		// insertion point for declarations 
+		MarkdownContentsTableComponent,
+		MarkdownContentSortingComponent,
+		MarkdownContentDetailComponent,
+		MarkdownContentPresentationComponent,
+
 		ParagraphsTableComponent,
 		ParagraphSortingComponent,
 		ParagraphDetailComponent,
@@ -91,6 +101,11 @@ import { ParagraphPresentationComponent } from './paragraph-presentation/paragra
 	],
 	exports: [
 		// insertion point for declarations 
+		MarkdownContentsTableComponent,
+		MarkdownContentSortingComponent,
+		MarkdownContentDetailComponent,
+		MarkdownContentPresentationComponent,
+
 		ParagraphsTableComponent,
 		ParagraphSortingComponent,
 		ParagraphDetailComponent,

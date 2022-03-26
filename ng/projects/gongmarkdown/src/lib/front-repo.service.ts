@@ -4,12 +4,18 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, combineLatest, BehaviorSubject } from 'rxjs';
 
 // insertion point sub template for services imports 
+import { MarkdownContentDB } from './markdowncontent-db'
+import { MarkdownContentService } from './markdowncontent.service'
+
 import { ParagraphDB } from './paragraph-db'
 import { ParagraphService } from './paragraph.service'
 
 
 // FrontRepo stores all instances in a front repository (design pattern repository)
 export class FrontRepo { // insertion point sub template 
+  MarkdownContents_array = new Array<MarkdownContentDB>(); // array of repo instances
+  MarkdownContents = new Map<number, MarkdownContentDB>(); // map of repo instances
+  MarkdownContents_batch = new Map<number, MarkdownContentDB>(); // same but only in last GET (for finding repo instances to delete)
   Paragraphs_array = new Array<ParagraphDB>(); // array of repo instances
   Paragraphs = new Map<number, ParagraphDB>(); // map of repo instances
   Paragraphs_batch = new Map<number, ParagraphDB>(); // same but only in last GET (for finding repo instances to delete)
@@ -71,6 +77,7 @@ export class FrontRepoService {
 
   constructor(
     private http: HttpClient, // insertion point sub template 
+    private markdowncontentService: MarkdownContentService,
     private paragraphService: ParagraphService,
   ) { }
 
@@ -102,8 +109,10 @@ export class FrontRepoService {
 
   // typing of observable can be messy in typescript. Therefore, one force the type
   observableFrontRepo: [ // insertion point sub template 
+    Observable<MarkdownContentDB[]>,
     Observable<ParagraphDB[]>,
   ] = [ // insertion point sub template 
+      this.markdowncontentService.getMarkdownContents(),
       this.paragraphService.getParagraphs(),
     ];
 
@@ -120,16 +129,52 @@ export class FrontRepoService {
           this.observableFrontRepo
         ).subscribe(
           ([ // insertion point sub template for declarations 
+            markdowncontents_,
             paragraphs_,
           ]) => {
             // Typing can be messy with many items. Therefore, type casting is necessary here
             // insertion point sub template for type casting 
+            var markdowncontents: MarkdownContentDB[]
+            markdowncontents = markdowncontents_ as MarkdownContentDB[]
             var paragraphs: ParagraphDB[]
             paragraphs = paragraphs_ as ParagraphDB[]
 
             // 
             // First Step: init map of instances
             // insertion point sub template for init 
+            // init the array
+            FrontRepoSingloton.MarkdownContents_array = markdowncontents
+
+            // clear the map that counts MarkdownContent in the GET
+            FrontRepoSingloton.MarkdownContents_batch.clear()
+
+            markdowncontents.forEach(
+              markdowncontent => {
+                FrontRepoSingloton.MarkdownContents.set(markdowncontent.ID, markdowncontent)
+                FrontRepoSingloton.MarkdownContents_batch.set(markdowncontent.ID, markdowncontent)
+              }
+            )
+
+            // clear markdowncontents that are absent from the batch
+            FrontRepoSingloton.MarkdownContents.forEach(
+              markdowncontent => {
+                if (FrontRepoSingloton.MarkdownContents_batch.get(markdowncontent.ID) == undefined) {
+                  FrontRepoSingloton.MarkdownContents.delete(markdowncontent.ID)
+                }
+              }
+            )
+
+            // sort MarkdownContents_array array
+            FrontRepoSingloton.MarkdownContents_array.sort((t1, t2) => {
+              if (t1.Name > t2.Name) {
+                return 1;
+              }
+              if (t1.Name < t2.Name) {
+                return -1;
+              }
+              return 0;
+            });
+
             // init the array
             FrontRepoSingloton.Paragraphs_array = paragraphs
 
@@ -167,6 +212,13 @@ export class FrontRepoService {
             // 
             // Second Step: redeem pointers between instances (thanks to maps in the First Step)
             // insertion point sub template for redeem 
+            markdowncontents.forEach(
+              markdowncontent => {
+                // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
+
+                // insertion point for redeeming ONE-MANY associations
+              }
+            )
             paragraphs.forEach(
               paragraph => {
                 // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
@@ -184,6 +236,57 @@ export class FrontRepoService {
   }
 
   // insertion point for pull per struct 
+
+  // MarkdownContentPull performs a GET on MarkdownContent of the stack and redeem association pointers 
+  MarkdownContentPull(): Observable<FrontRepo> {
+    return new Observable<FrontRepo>(
+      (observer) => {
+        combineLatest([
+          this.markdowncontentService.getMarkdownContents()
+        ]).subscribe(
+          ([ // insertion point sub template 
+            markdowncontents,
+          ]) => {
+            // init the array
+            FrontRepoSingloton.MarkdownContents_array = markdowncontents
+
+            // clear the map that counts MarkdownContent in the GET
+            FrontRepoSingloton.MarkdownContents_batch.clear()
+
+            // 
+            // First Step: init map of instances
+            // insertion point sub template 
+            markdowncontents.forEach(
+              markdowncontent => {
+                FrontRepoSingloton.MarkdownContents.set(markdowncontent.ID, markdowncontent)
+                FrontRepoSingloton.MarkdownContents_batch.set(markdowncontent.ID, markdowncontent)
+
+                // insertion point for redeeming ONE/ZERO-ONE associations
+
+                // insertion point for redeeming ONE-MANY associations
+              }
+            )
+
+            // clear markdowncontents that are absent from the GET
+            FrontRepoSingloton.MarkdownContents.forEach(
+              markdowncontent => {
+                if (FrontRepoSingloton.MarkdownContents_batch.get(markdowncontent.ID) == undefined) {
+                  FrontRepoSingloton.MarkdownContents.delete(markdowncontent.ID)
+                }
+              }
+            )
+
+            // 
+            // Second Step: redeem pointers between instances (thanks to maps in the First Step)
+            // insertion point sub template 
+
+            // hand over control flow to observer
+            observer.next(FrontRepoSingloton)
+          }
+        )
+      }
+    )
+  }
 
   // ParagraphPull performs a GET on Paragraph of the stack and redeem association pointers 
   ParagraphPull(): Observable<FrontRepo> {
@@ -238,6 +341,9 @@ export class FrontRepoService {
 }
 
 // insertion point for get unique ID per struct 
-export function getParagraphUniqueID(id: number): number {
+export function getMarkdownContentUniqueID(id: number): number {
   return 31 * id
+}
+export function getParagraphUniqueID(id: number): number {
+  return 37 * id
 }

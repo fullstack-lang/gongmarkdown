@@ -20,6 +20,9 @@ var __member __void
 // StageStruct enables storage of staged instances
 // swagger:ignore
 type StageStruct struct { // insertion point for definition of arrays registering instances
+	MarkdownContents           map[*MarkdownContent]struct{}
+	MarkdownContents_mapString map[string]*MarkdownContent
+
 	Paragraphs           map[*Paragraph]struct{}
 	Paragraphs_mapString map[string]*Paragraph
 
@@ -50,6 +53,8 @@ type BackRepoInterface interface {
 	BackupXL(stage *StageStruct, dirPath string)
 	RestoreXL(stage *StageStruct, dirPath string)
 	// insertion point for Commit and Checkout signatures
+	CommitMarkdownContent(markdowncontent *MarkdownContent)
+	CheckoutMarkdownContent(markdowncontent *MarkdownContent)
 	CommitParagraph(paragraph *Paragraph)
 	CheckoutParagraph(paragraph *Paragraph)
 	GetLastCommitFromBackNb() uint
@@ -58,6 +63,9 @@ type BackRepoInterface interface {
 
 // swagger:ignore instructs the gong compiler (gongc) to avoid this particular struct
 var Stage StageStruct = StageStruct{ // insertion point for array initiatialisation
+	MarkdownContents:           make(map[*MarkdownContent]struct{}),
+	MarkdownContents_mapString: make(map[string]*MarkdownContent),
+
 	Paragraphs:           make(map[*Paragraph]struct{}),
 	Paragraphs_mapString: make(map[string]*Paragraph),
 
@@ -71,6 +79,7 @@ func (stage *StageStruct) Commit() {
 	}
 
 	// insertion point for computing the map of number of instances per gongstruct
+	stage.Map_GongStructName_InstancesNb["MarkdownContent"] = len(stage.MarkdownContents)
 	stage.Map_GongStructName_InstancesNb["Paragraph"] = len(stage.Paragraphs)
 
 }
@@ -110,6 +119,108 @@ func (stage *StageStruct) RestoreXL(dirPath string) {
 }
 
 // insertion point for cumulative sub template with model space calls
+func (stage *StageStruct) getMarkdownContentOrderedStructWithNameField() []*MarkdownContent {
+	// have alphabetical order generation
+	markdowncontentOrdered := []*MarkdownContent{}
+	for markdowncontent := range stage.MarkdownContents {
+		markdowncontentOrdered = append(markdowncontentOrdered, markdowncontent)
+	}
+	sort.Slice(markdowncontentOrdered[:], func(i, j int) bool {
+		return markdowncontentOrdered[i].Name < markdowncontentOrdered[j].Name
+	})
+	return markdowncontentOrdered
+}
+
+// Stage puts markdowncontent to the model stage
+func (markdowncontent *MarkdownContent) Stage() *MarkdownContent {
+	Stage.MarkdownContents[markdowncontent] = __member
+	Stage.MarkdownContents_mapString[markdowncontent.Name] = markdowncontent
+
+	return markdowncontent
+}
+
+// Unstage removes markdowncontent off the model stage
+func (markdowncontent *MarkdownContent) Unstage() *MarkdownContent {
+	delete(Stage.MarkdownContents, markdowncontent)
+	delete(Stage.MarkdownContents_mapString, markdowncontent.Name)
+	return markdowncontent
+}
+
+// commit markdowncontent to the back repo (if it is already staged)
+func (markdowncontent *MarkdownContent) Commit() *MarkdownContent {
+	if _, ok := Stage.MarkdownContents[markdowncontent]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CommitMarkdownContent(markdowncontent)
+		}
+	}
+	return markdowncontent
+}
+
+// Checkout markdowncontent to the back repo (if it is already staged)
+func (markdowncontent *MarkdownContent) Checkout() *MarkdownContent {
+	if _, ok := Stage.MarkdownContents[markdowncontent]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CheckoutMarkdownContent(markdowncontent)
+		}
+	}
+	return markdowncontent
+}
+
+//
+// Legacy, to be deleted
+//
+
+// StageCopy appends a copy of markdowncontent to the model stage
+func (markdowncontent *MarkdownContent) StageCopy() *MarkdownContent {
+	_markdowncontent := new(MarkdownContent)
+	*_markdowncontent = *markdowncontent
+	_markdowncontent.Stage()
+	return _markdowncontent
+}
+
+// StageAndCommit appends markdowncontent to the model stage and commit to the orm repo
+func (markdowncontent *MarkdownContent) StageAndCommit() *MarkdownContent {
+	markdowncontent.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMMarkdownContent(markdowncontent)
+	}
+	return markdowncontent
+}
+
+// DeleteStageAndCommit appends markdowncontent to the model stage and commit to the orm repo
+func (markdowncontent *MarkdownContent) DeleteStageAndCommit() *MarkdownContent {
+	markdowncontent.Unstage()
+	DeleteORMMarkdownContent(markdowncontent)
+	return markdowncontent
+}
+
+// StageCopyAndCommit appends a copy of markdowncontent to the model stage and commit to the orm repo
+func (markdowncontent *MarkdownContent) StageCopyAndCommit() *MarkdownContent {
+	_markdowncontent := new(MarkdownContent)
+	*_markdowncontent = *markdowncontent
+	_markdowncontent.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMMarkdownContent(markdowncontent)
+	}
+	return _markdowncontent
+}
+
+// CreateORMMarkdownContent enables dynamic staging of a MarkdownContent instance
+func CreateORMMarkdownContent(markdowncontent *MarkdownContent) {
+	markdowncontent.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMMarkdownContent(markdowncontent)
+	}
+}
+
+// DeleteORMMarkdownContent enables dynamic staging of a MarkdownContent instance
+func DeleteORMMarkdownContent(markdowncontent *MarkdownContent) {
+	markdowncontent.Unstage()
+	if Stage.AllModelsStructDeleteCallback != nil {
+		Stage.AllModelsStructDeleteCallback.DeleteORMMarkdownContent(markdowncontent)
+	}
+}
+
 func (stage *StageStruct) getParagraphOrderedStructWithNameField() []*Paragraph {
 	// have alphabetical order generation
 	paragraphOrdered := []*Paragraph{}
@@ -214,20 +325,28 @@ func DeleteORMParagraph(paragraph *Paragraph) {
 
 // swagger:ignore
 type AllModelsStructCreateInterface interface { // insertion point for Callbacks on creation
+	CreateORMMarkdownContent(MarkdownContent *MarkdownContent)
 	CreateORMParagraph(Paragraph *Paragraph)
 }
 
 type AllModelsStructDeleteInterface interface { // insertion point for Callbacks on deletion
+	DeleteORMMarkdownContent(MarkdownContent *MarkdownContent)
 	DeleteORMParagraph(Paragraph *Paragraph)
 }
 
 func (stage *StageStruct) Reset() { // insertion point for array reset
+	stage.MarkdownContents = make(map[*MarkdownContent]struct{})
+	stage.MarkdownContents_mapString = make(map[string]*MarkdownContent)
+
 	stage.Paragraphs = make(map[*Paragraph]struct{})
 	stage.Paragraphs_mapString = make(map[string]*Paragraph)
 
 }
 
 func (stage *StageStruct) Nil() { // insertion point for array nil
+	stage.MarkdownContents = nil
+	stage.MarkdownContents_mapString = nil
+
 	stage.Paragraphs = nil
 	stage.Paragraphs_mapString = nil
 
@@ -307,6 +426,44 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 	setValueField := ""
 
 	// insertion initialization of objects to stage
+	map_MarkdownContent_Identifiers := make(map[*MarkdownContent]string)
+	_ = map_MarkdownContent_Identifiers
+
+	markdowncontentOrdered := []*MarkdownContent{}
+	for markdowncontent := range stage.MarkdownContents {
+		markdowncontentOrdered = append(markdowncontentOrdered, markdowncontent)
+	}
+	sort.Slice(markdowncontentOrdered[:], func(i, j int) bool {
+		return markdowncontentOrdered[i].Name < markdowncontentOrdered[j].Name
+	})
+	identifiersDecl += fmt.Sprintf("\n\n	// Declarations of staged instances of MarkdownContent")
+	for idx, markdowncontent := range markdowncontentOrdered {
+
+		id = generatesIdentifier("MarkdownContent", idx, markdowncontent.Name)
+		map_MarkdownContent_Identifiers[markdowncontent] = id
+
+		decl = IdentifiersDecls
+		decl = strings.ReplaceAll(decl, "{{Identifier}}", id)
+		decl = strings.ReplaceAll(decl, "{{GeneratedStructName}}", "MarkdownContent")
+		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", markdowncontent.Name)
+		identifiersDecl += decl
+
+		initializerStatements += fmt.Sprintf("\n\n	// MarkdownContent %s values setup", markdowncontent.Name)
+		// Initialisation of values
+		setValueField = StringInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Name")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(markdowncontent.Name))
+		initializerStatements += setValueField
+
+		setValueField = StringInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Content")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(markdowncontent.Content))
+		initializerStatements += setValueField
+
+	}
+
 	map_Paragraph_Identifiers := make(map[*Paragraph]string)
 	_ = map_Paragraph_Identifiers
 
@@ -346,6 +503,16 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 	}
 
 	// insertion initialization of objects to stage
+	for idx, markdowncontent := range markdowncontentOrdered {
+		var setPointerField string
+		_ = setPointerField
+
+		id = generatesIdentifier("MarkdownContent", idx, markdowncontent.Name)
+		map_MarkdownContent_Identifiers[markdowncontent] = id
+
+		// Initialisation of values
+	}
+
 	for idx, paragraph := range paragraphOrdered {
 		var setPointerField string
 		_ = setPointerField
