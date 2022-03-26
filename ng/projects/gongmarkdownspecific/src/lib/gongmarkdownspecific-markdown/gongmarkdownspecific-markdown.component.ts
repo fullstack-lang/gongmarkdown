@@ -10,8 +10,6 @@ import { Observable, timer } from 'rxjs';
 })
 export class GongmarkdownspecificMarkdownComponent implements OnInit {
 
-  markdownContent: string = ""
-
   markdownContentDB: gongmarkdown.MarkdownContentDB | undefined
 
   /**
@@ -72,7 +70,6 @@ export class GongmarkdownspecificMarkdownComponent implements OnInit {
       markdownContentDBs => {
         if (markdownContentDBs.length == 1) {
           this.markdownContentDB = markdownContentDBs[0]
-          this.markdownContent = this.markdownContentDB.Content
         } else {
           console.log("wrong number of markdown content " + markdownContentDBs.length)
         }
