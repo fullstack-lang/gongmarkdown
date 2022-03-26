@@ -14,8 +14,8 @@ import { SelectionModel } from '@angular/cdk/collections';
 const allowMultiSelect = true;
 
 import { Router, RouterState } from '@angular/router';
-import { ParagraphDB } from '../paragraph-db'
-import { ParagraphService } from '../paragraph.service'
+import { ElementDB } from '../element-db'
+import { ElementService } from '../element.service'
 
 // insertion point for additional imports
 
@@ -29,24 +29,24 @@ enum TableComponentMode {
 
 // generated table component
 @Component({
-  selector: 'app-paragraphstable',
-  templateUrl: './paragraphs-table.component.html',
-  styleUrls: ['./paragraphs-table.component.css'],
+  selector: 'app-elementstable',
+  templateUrl: './elements-table.component.html',
+  styleUrls: ['./elements-table.component.css'],
 })
-export class ParagraphsTableComponent implements OnInit {
+export class ElementsTableComponent implements OnInit {
 
   // mode at invocation
   mode: TableComponentMode = TableComponentMode.DISPLAY_MODE
 
-  // used if the component is called as a selection component of Paragraph instances
-  selection: SelectionModel<ParagraphDB> = new (SelectionModel)
-  initialSelection = new Array<ParagraphDB>()
+  // used if the component is called as a selection component of Element instances
+  selection: SelectionModel<ElementDB> = new (SelectionModel)
+  initialSelection = new Array<ElementDB>()
 
   // the data source for the table
-  paragraphs: ParagraphDB[] = []
-  matTableDataSource: MatTableDataSource<ParagraphDB> = new (MatTableDataSource)
+  elements: ElementDB[] = []
+  matTableDataSource: MatTableDataSource<ElementDB> = new (MatTableDataSource)
 
-  // front repo, that will be referenced by this.paragraphs
+  // front repo, that will be referenced by this.elements
   frontRepo: FrontRepo = new (FrontRepo)
 
   // displayedColumns is referenced by the MatTable component for specify what columns
@@ -62,17 +62,20 @@ export class ParagraphsTableComponent implements OnInit {
   ngAfterViewInit() {
 
     // enable sorting on all fields (including pointers and reverse pointer)
-    this.matTableDataSource.sortingDataAccessor = (paragraphDB: ParagraphDB, property: string) => {
+    this.matTableDataSource.sortingDataAccessor = (elementDB: ElementDB, property: string) => {
       switch (property) {
         case 'ID':
-          return paragraphDB.ID
+          return elementDB.ID
 
         // insertion point for specific sorting accessor
         case 'Name':
-          return paragraphDB.Name;
+          return elementDB.Name;
 
         case 'Content':
-          return paragraphDB.Content;
+          return elementDB.Content;
+
+        case 'Element_SubElements':
+          return this.frontRepo.Elements.get(elementDB.Element_SubElementsDBID.Int64)!.Name;
 
         default:
           console.assert(false, "Unknown field")
@@ -81,15 +84,19 @@ export class ParagraphsTableComponent implements OnInit {
     };
 
     // enable filtering on all fields (including pointers and reverse pointer, which is not done by default)
-    this.matTableDataSource.filterPredicate = (paragraphDB: ParagraphDB, filter: string) => {
+    this.matTableDataSource.filterPredicate = (elementDB: ElementDB, filter: string) => {
 
       // filtering is based on finding a lower case filter into a concatenated string
-      // the paragraphDB properties
+      // the elementDB properties
       let mergedContent = ""
 
       // insertion point for merging of fields
-      mergedContent += paragraphDB.Name.toLowerCase()
-      mergedContent += paragraphDB.Content.toLowerCase()
+      mergedContent += elementDB.Name.toLowerCase()
+      mergedContent += elementDB.Content.toLowerCase()
+      if (elementDB.Element_SubElementsDBID.Int64 != 0) {
+        mergedContent += this.frontRepo.Elements.get(elementDB.Element_SubElementsDBID.Int64)!.Name.toLowerCase()
+      }
+
 
       let isSelected = mergedContent.includes(filter.toLowerCase())
       return isSelected
@@ -105,11 +112,11 @@ export class ParagraphsTableComponent implements OnInit {
   }
 
   constructor(
-    private paragraphService: ParagraphService,
+    private elementService: ElementService,
     private frontRepoService: FrontRepoService,
 
-    // not null if the component is called as a selection component of paragraph instances
-    public dialogRef: MatDialogRef<ParagraphsTableComponent>,
+    // not null if the component is called as a selection component of element instances
+    public dialogRef: MatDialogRef<ElementsTableComponent>,
     @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: DialogData,
 
     private router: Router,
@@ -131,10 +138,10 @@ export class ParagraphsTableComponent implements OnInit {
     }
 
     // observable for changes in structs
-    this.paragraphService.ParagraphServiceChanged.subscribe(
+    this.elementService.ElementServiceChanged.subscribe(
       message => {
         if (message == "post" || message == "update" || message == "delete") {
-          this.getParagraphs()
+          this.getElements()
         }
       }
     )
@@ -142,103 +149,105 @@ export class ParagraphsTableComponent implements OnInit {
       this.displayedColumns = ['ID', 'Edit', 'Delete', // insertion point for columns to display
         "Name",
         "Content",
+        "Element_SubElements",
       ]
     } else {
       this.displayedColumns = ['select', 'ID', // insertion point for columns to display
         "Name",
         "Content",
+        "Element_SubElements",
       ]
-      this.selection = new SelectionModel<ParagraphDB>(allowMultiSelect, this.initialSelection);
+      this.selection = new SelectionModel<ElementDB>(allowMultiSelect, this.initialSelection);
     }
 
   }
 
   ngOnInit(): void {
-    this.getParagraphs()
-    this.matTableDataSource = new MatTableDataSource(this.paragraphs)
+    this.getElements()
+    this.matTableDataSource = new MatTableDataSource(this.elements)
   }
 
-  getParagraphs(): void {
+  getElements(): void {
     this.frontRepoService.pull().subscribe(
       frontRepo => {
         this.frontRepo = frontRepo
 
-        this.paragraphs = this.frontRepo.Paragraphs_array;
+        this.elements = this.frontRepo.Elements_array;
 
         // insertion point for time duration Recoveries
         // insertion point for enum int Recoveries
         
         // in case the component is called as a selection component
         if (this.mode == TableComponentMode.ONE_MANY_ASSOCIATION_MODE) {
-          for (let paragraph of this.paragraphs) {
+          for (let element of this.elements) {
             let ID = this.dialogData.ID
-            let revPointer = paragraph[this.dialogData.ReversePointer as keyof ParagraphDB] as unknown as NullInt64
+            let revPointer = element[this.dialogData.ReversePointer as keyof ElementDB] as unknown as NullInt64
             if (revPointer.Int64 == ID) {
-              this.initialSelection.push(paragraph)
+              this.initialSelection.push(element)
             }
-            this.selection = new SelectionModel<ParagraphDB>(allowMultiSelect, this.initialSelection);
+            this.selection = new SelectionModel<ElementDB>(allowMultiSelect, this.initialSelection);
           }
         }
 
         if (this.mode == TableComponentMode.MANY_MANY_ASSOCIATION_MODE) {
 
-          let mapOfSourceInstances = this.frontRepo[this.dialogData.SourceStruct + "s" as keyof FrontRepo] as Map<number, ParagraphDB>
+          let mapOfSourceInstances = this.frontRepo[this.dialogData.SourceStruct + "s" as keyof FrontRepo] as Map<number, ElementDB>
           let sourceInstance = mapOfSourceInstances.get(this.dialogData.ID)!
 
-          let sourceField = sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance]! as unknown as ParagraphDB[]
+          let sourceField = sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance]! as unknown as ElementDB[]
           for (let associationInstance of sourceField) {
-            let paragraph = associationInstance[this.dialogData.IntermediateStructField as keyof typeof associationInstance] as unknown as ParagraphDB
-            this.initialSelection.push(paragraph)
+            let element = associationInstance[this.dialogData.IntermediateStructField as keyof typeof associationInstance] as unknown as ElementDB
+            this.initialSelection.push(element)
           }
 
-          this.selection = new SelectionModel<ParagraphDB>(allowMultiSelect, this.initialSelection);
+          this.selection = new SelectionModel<ElementDB>(allowMultiSelect, this.initialSelection);
         }
 
         // update the mat table data source
-        this.matTableDataSource.data = this.paragraphs
+        this.matTableDataSource.data = this.elements
       }
     )
   }
 
-  // newParagraph initiate a new paragraph
-  // create a new Paragraph objet
-  newParagraph() {
+  // newElement initiate a new element
+  // create a new Element objet
+  newElement() {
   }
 
-  deleteParagraph(paragraphID: number, paragraph: ParagraphDB) {
-    // list of paragraphs is truncated of paragraph before the delete
-    this.paragraphs = this.paragraphs.filter(h => h !== paragraph);
+  deleteElement(elementID: number, element: ElementDB) {
+    // list of elements is truncated of element before the delete
+    this.elements = this.elements.filter(h => h !== element);
 
-    this.paragraphService.deleteParagraph(paragraphID).subscribe(
-      paragraph => {
-        this.paragraphService.ParagraphServiceChanged.next("delete")
+    this.elementService.deleteElement(elementID).subscribe(
+      element => {
+        this.elementService.ElementServiceChanged.next("delete")
       }
     );
   }
 
-  editParagraph(paragraphID: number, paragraph: ParagraphDB) {
+  editElement(elementID: number, element: ElementDB) {
 
   }
 
-  // display paragraph in router
-  displayParagraphInRouter(paragraphID: number) {
-    this.router.navigate(["gongmarkdown_go-" + "paragraph-display", paragraphID])
+  // display element in router
+  displayElementInRouter(elementID: number) {
+    this.router.navigate(["gongmarkdown_go-" + "element-display", elementID])
   }
 
   // set editor outlet
-  setEditorRouterOutlet(paragraphID: number) {
+  setEditorRouterOutlet(elementID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_editor: ["gongmarkdown_go-" + "paragraph-detail", paragraphID]
+        gongmarkdown_go_editor: ["gongmarkdown_go-" + "element-detail", elementID]
       }
     }]);
   }
 
   // set presentation outlet
-  setPresentationRouterOutlet(paragraphID: number) {
+  setPresentationRouterOutlet(elementID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_presentation: ["gongmarkdown_go-" + "paragraph-presentation", paragraphID]
+        gongmarkdown_go_presentation: ["gongmarkdown_go-" + "element-presentation", elementID]
       }
     }]);
   }
@@ -246,7 +255,7 @@ export class ParagraphsTableComponent implements OnInit {
   /** Whether the number of selected elements matches the total number of rows. */
   isAllSelected() {
     const numSelected = this.selection.selected.length;
-    const numRows = this.paragraphs.length;
+    const numRows = this.elements.length;
     return numSelected === numRows;
   }
 
@@ -254,39 +263,39 @@ export class ParagraphsTableComponent implements OnInit {
   masterToggle() {
     this.isAllSelected() ?
       this.selection.clear() :
-      this.paragraphs.forEach(row => this.selection.select(row));
+      this.elements.forEach(row => this.selection.select(row));
   }
 
   save() {
 
     if (this.mode == TableComponentMode.ONE_MANY_ASSOCIATION_MODE) {
 
-      let toUpdate = new Set<ParagraphDB>()
+      let toUpdate = new Set<ElementDB>()
 
-      // reset all initial selection of paragraph that belong to paragraph
-      for (let paragraph of this.initialSelection) {
-        let index = paragraph[this.dialogData.ReversePointer as keyof ParagraphDB] as unknown as NullInt64
+      // reset all initial selection of element that belong to element
+      for (let element of this.initialSelection) {
+        let index = element[this.dialogData.ReversePointer as keyof ElementDB] as unknown as NullInt64
         index.Int64 = 0
         index.Valid = true
-        toUpdate.add(paragraph)
+        toUpdate.add(element)
 
       }
 
-      // from selection, set paragraph that belong to paragraph
-      for (let paragraph of this.selection.selected) {
+      // from selection, set element that belong to element
+      for (let element of this.selection.selected) {
         let ID = this.dialogData.ID as number
-        let reversePointer = paragraph[this.dialogData.ReversePointer as keyof ParagraphDB] as unknown as NullInt64
+        let reversePointer = element[this.dialogData.ReversePointer as keyof ElementDB] as unknown as NullInt64
         reversePointer.Int64 = ID
         reversePointer.Valid = true
-        toUpdate.add(paragraph)
+        toUpdate.add(element)
       }
 
 
-      // update all paragraph (only update selection & initial selection)
-      for (let paragraph of toUpdate) {
-        this.paragraphService.updateParagraph(paragraph)
-          .subscribe(paragraph => {
-            this.paragraphService.ParagraphServiceChanged.next("update")
+      // update all element (only update selection & initial selection)
+      for (let element of toUpdate) {
+        this.elementService.updateElement(element)
+          .subscribe(element => {
+            this.elementService.ElementServiceChanged.next("update")
           });
       }
     }
@@ -294,26 +303,26 @@ export class ParagraphsTableComponent implements OnInit {
     if (this.mode == TableComponentMode.MANY_MANY_ASSOCIATION_MODE) {
 
       // get the source instance via the map of instances in the front repo
-      let mapOfSourceInstances = this.frontRepo[this.dialogData.SourceStruct + "s" as keyof FrontRepo] as Map<number, ParagraphDB>
+      let mapOfSourceInstances = this.frontRepo[this.dialogData.SourceStruct + "s" as keyof FrontRepo] as Map<number, ElementDB>
       let sourceInstance = mapOfSourceInstances.get(this.dialogData.ID)!
 
       // First, parse all instance of the association struct and remove the instance
       // that have unselect
-      let unselectedParagraph = new Set<number>()
-      for (let paragraph of this.initialSelection) {
-        if (this.selection.selected.includes(paragraph)) {
-          // console.log("paragraph " + paragraph.Name + " is still selected")
+      let unselectedElement = new Set<number>()
+      for (let element of this.initialSelection) {
+        if (this.selection.selected.includes(element)) {
+          // console.log("element " + element.Name + " is still selected")
         } else {
-          console.log("paragraph " + paragraph.Name + " has been unselected")
-          unselectedParagraph.add(paragraph.ID)
-          console.log("is unselected " + unselectedParagraph.has(paragraph.ID))
+          console.log("element " + element.Name + " has been unselected")
+          unselectedElement.add(element.ID)
+          console.log("is unselected " + unselectedElement.has(element.ID))
         }
       }
 
       // delete the association instance
       let associationInstance = sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance]
-      let paragraph = associationInstance![this.dialogData.IntermediateStructField as keyof typeof associationInstance] as unknown as ParagraphDB
-      if (unselectedParagraph.has(paragraph.ID)) {
+      let element = associationInstance![this.dialogData.IntermediateStructField as keyof typeof associationInstance] as unknown as ElementDB
+      if (unselectedElement.has(element.ID)) {
         this.frontRepoService.deleteService(this.dialogData.IntermediateStruct, associationInstance)
 
 
@@ -321,38 +330,38 @@ export class ParagraphsTableComponent implements OnInit {
 
       // is the source array is empty create it
       if (sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance] == undefined) {
-        (sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance] as unknown as Array<ParagraphDB>) = new Array<ParagraphDB>()
+        (sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance] as unknown as Array<ElementDB>) = new Array<ElementDB>()
       }
 
       // second, parse all instance of the selected
       if (sourceInstance[this.dialogData.SourceField as keyof typeof sourceInstance]) {
         this.selection.selected.forEach(
-          paragraph => {
-            if (!this.initialSelection.includes(paragraph)) {
-              // console.log("paragraph " + paragraph.Name + " has been added to the selection")
+          element => {
+            if (!this.initialSelection.includes(element)) {
+              // console.log("element " + element.Name + " has been added to the selection")
 
               let associationInstance = {
-                Name: sourceInstance["Name"] + "-" + paragraph.Name,
+                Name: sourceInstance["Name"] + "-" + element.Name,
               }
 
               let index = associationInstance[this.dialogData.IntermediateStructField + "ID" as keyof typeof associationInstance] as unknown as NullInt64
-              index.Int64 = paragraph.ID
+              index.Int64 = element.ID
               index.Valid = true
 
               let indexDB = associationInstance[this.dialogData.IntermediateStructField + "DBID" as keyof typeof associationInstance] as unknown as NullInt64
-              indexDB.Int64 = paragraph.ID
+              indexDB.Int64 = element.ID
               index.Valid = true
 
               this.frontRepoService.postService(this.dialogData.IntermediateStruct, associationInstance)
 
             } else {
-              // console.log("paragraph " + paragraph.Name + " is still selected")
+              // console.log("element " + element.Name + " is still selected")
             }
           }
         )
       }
 
-      // this.selection = new SelectionModel<ParagraphDB>(allowMultiSelect, this.initialSelection);
+      // this.selection = new SelectionModel<ElementDB>(allowMultiSelect, this.initialSelection);
     }
 
     // why pizza ?

@@ -1,8 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup } from '@angular/forms';
 
-import { ParagraphDB } from '../paragraph-db'
-import { ParagraphService } from '../paragraph.service'
+import { ElementDB } from '../element-db'
+import { ElementService } from '../element.service'
 
 import { FrontRepoService, FrontRepo } from '../front-repo.service'
 
@@ -10,18 +10,18 @@ import { Router, RouterState, ActivatedRoute } from '@angular/router';
 
 // insertion point for additional imports
 
-export interface paragraphDummyElement {
+export interface elementDummyElement {
 }
 
-const ELEMENT_DATA: paragraphDummyElement[] = [
+const ELEMENT_DATA: elementDummyElement[] = [
 ];
 
 @Component({
-	selector: 'app-paragraph-presentation',
-	templateUrl: './paragraph-presentation.component.html',
-	styleUrls: ['./paragraph-presentation.component.css'],
+	selector: 'app-element-presentation',
+	templateUrl: './element-presentation.component.html',
+	styleUrls: ['./element-presentation.component.css'],
 })
-export class ParagraphPresentationComponent implements OnInit {
+export class ElementPresentationComponent implements OnInit {
 
 	// insertion point for additionnal time duration declarations
 	// insertion point for additionnal enum int field declarations
@@ -29,13 +29,13 @@ export class ParagraphPresentationComponent implements OnInit {
 	displayedColumns: string[] = []
 	dataSource = ELEMENT_DATA
 
-	paragraph: ParagraphDB = new (ParagraphDB)
+	element: ElementDB = new (ElementDB)
 
 	// front repo
 	frontRepo: FrontRepo = new (FrontRepo)
  
 	constructor(
-		private paragraphService: ParagraphService,
+		private elementService: ElementService,
 		private frontRepoService: FrontRepoService,
 		private route: ActivatedRoute,
 		private router: Router,
@@ -46,25 +46,25 @@ export class ParagraphPresentationComponent implements OnInit {
 	}
 
 	ngOnInit(): void {
-		this.getParagraph();
+		this.getElement();
 
 		// observable for changes in 
-		this.paragraphService.ParagraphServiceChanged.subscribe(
+		this.elementService.ElementServiceChanged.subscribe(
 			message => {
 				if (message == "update") {
-					this.getParagraph()
+					this.getElement()
 				}
 			}
 		)
 	}
 
-	getParagraph(): void {
+	getElement(): void {
 		const id = +this.route.snapshot.paramMap.get('id')!
 		this.frontRepoService.pull().subscribe(
 			frontRepo => {
 				this.frontRepo = frontRepo
 
-				this.paragraph = this.frontRepo.Paragraphs.get(id)!
+				this.element = this.frontRepo.Elements.get(id)!
 
 				// insertion point for recovery of durations
 				// insertion point for recovery of enum tint
@@ -85,7 +85,7 @@ export class ParagraphPresentationComponent implements OnInit {
 	setEditorRouterOutlet(ID: number) {
 		this.router.navigate([{
 			outlets: {
-				gongmarkdown_go_editor: ["gongmarkdown_go-" + "paragraph-detail", ID]
+				gongmarkdown_go_editor: ["gongmarkdown_go-" + "element-detail", ID]
 			}
 		}]);
 	}

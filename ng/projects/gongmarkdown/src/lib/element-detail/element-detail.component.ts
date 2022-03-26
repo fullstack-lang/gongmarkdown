@@ -2,8 +2,8 @@
 import { Component, OnInit } from '@angular/core';
 import { FormControl } from '@angular/forms';
 
-import { ParagraphDB } from '../paragraph-db'
-import { ParagraphService } from '../paragraph.service'
+import { ElementDB } from '../element-db'
+import { ElementService } from '../element.service'
 
 import { FrontRepoService, FrontRepo, SelectionMode, DialogData } from '../front-repo.service'
 import { MapOfComponents } from '../map-components'
@@ -17,25 +17,26 @@ import { MatDialog, MAT_DIALOG_DATA, MatDialogRef, MatDialogConfig } from '@angu
 
 import { NullInt64 } from '../null-int64'
 
-// ParagraphDetailComponent is initilizaed from different routes
-// ParagraphDetailComponentState detail different cases 
-enum ParagraphDetailComponentState {
+// ElementDetailComponent is initilizaed from different routes
+// ElementDetailComponentState detail different cases 
+enum ElementDetailComponentState {
 	CREATE_INSTANCE,
 	UPDATE_INSTANCE,
 	// insertion point for declarations of enum values of state
+	CREATE_INSTANCE_WITH_ASSOCIATION_Element_SubElements_SET,
 }
 
 @Component({
-	selector: 'app-paragraph-detail',
-	templateUrl: './paragraph-detail.component.html',
-	styleUrls: ['./paragraph-detail.component.css'],
+	selector: 'app-element-detail',
+	templateUrl: './element-detail.component.html',
+	styleUrls: ['./element-detail.component.css'],
 })
-export class ParagraphDetailComponent implements OnInit {
+export class ElementDetailComponent implements OnInit {
 
 	// insertion point for declarations
 
-	// the ParagraphDB of interest
-	paragraph: ParagraphDB = new ParagraphDB
+	// the ElementDB of interest
+	element: ElementDB = new ElementDB
 
 	// front repo
 	frontRepo: FrontRepo = new FrontRepo
@@ -46,7 +47,7 @@ export class ParagraphDetailComponent implements OnInit {
 	mapFields_displayAsTextArea = new Map<string, boolean>()
 
 	// the state at initialization (CREATION, UPDATE or CREATE with one association set)
-	state: ParagraphDetailComponentState = ParagraphDetailComponentState.CREATE_INSTANCE
+	state: ElementDetailComponentState = ElementDetailComponentState.CREATE_INSTANCE
 
 	// in UDPATE state, if is the id of the instance to update
 	// in CREATE state with one association set, this is the id of the associated instance
@@ -57,7 +58,7 @@ export class ParagraphDetailComponent implements OnInit {
 	originStructFieldName: string = ""
 
 	constructor(
-		private paragraphService: ParagraphService,
+		private elementService: ElementService,
 		private frontRepoService: FrontRepoService,
 		public dialog: MatDialog,
 		private route: ActivatedRoute,
@@ -74,26 +75,30 @@ export class ParagraphDetailComponent implements OnInit {
 
 		const association = this.route.snapshot.paramMap.get('association');
 		if (this.id == 0) {
-			this.state = ParagraphDetailComponentState.CREATE_INSTANCE
+			this.state = ElementDetailComponentState.CREATE_INSTANCE
 		} else {
 			if (this.originStruct == undefined) {
-				this.state = ParagraphDetailComponentState.UPDATE_INSTANCE
+				this.state = ElementDetailComponentState.UPDATE_INSTANCE
 			} else {
 				switch (this.originStructFieldName) {
 					// insertion point for state computation
+					case "SubElements":
+						// console.log("Element" + " is instanciated with back pointer to instance " + this.id + " Element association SubElements")
+						this.state = ElementDetailComponentState.CREATE_INSTANCE_WITH_ASSOCIATION_Element_SubElements_SET
+						break;
 					default:
 						console.log(this.originStructFieldName + " is unkown association")
 				}
 			}
 		}
 
-		this.getParagraph()
+		this.getElement()
 
 		// observable for changes in structs
-		this.paragraphService.ParagraphServiceChanged.subscribe(
+		this.elementService.ElementServiceChanged.subscribe(
 			message => {
 				if (message == "post" || message == "update" || message == "delete") {
-					this.getParagraph()
+					this.getElement()
 				}
 			}
 		)
@@ -101,22 +106,26 @@ export class ParagraphDetailComponent implements OnInit {
 		// insertion point for initialisation of enums list
 	}
 
-	getParagraph(): void {
+	getElement(): void {
 
 		this.frontRepoService.pull().subscribe(
 			frontRepo => {
 				this.frontRepo = frontRepo
 
 				switch (this.state) {
-					case ParagraphDetailComponentState.CREATE_INSTANCE:
-						this.paragraph = new (ParagraphDB)
+					case ElementDetailComponentState.CREATE_INSTANCE:
+						this.element = new (ElementDB)
 						break;
-					case ParagraphDetailComponentState.UPDATE_INSTANCE:
-						let paragraph = frontRepo.Paragraphs.get(this.id)
-						console.assert(paragraph != undefined, "missing paragraph with id:" + this.id)
-						this.paragraph = paragraph!
+					case ElementDetailComponentState.UPDATE_INSTANCE:
+						let element = frontRepo.Elements.get(this.id)
+						console.assert(element != undefined, "missing element with id:" + this.id)
+						this.element = element!
 						break;
 					// insertion point for init of association field
+					case ElementDetailComponentState.CREATE_INSTANCE_WITH_ASSOCIATION_Element_SubElements_SET:
+						this.element = new (ElementDB)
+						this.element.Element_SubElements_reverse = frontRepo.Elements.get(this.id)!
+						break;
 					default:
 						console.log(this.state + " is unkown state")
 				}
@@ -138,18 +147,30 @@ export class ParagraphDetailComponent implements OnInit {
 		// save from the front pointer space to the non pointer space for serialization
 
 		// insertion point for translation/nullation of each pointers
+		if (this.element.Element_SubElements_reverse != undefined) {
+			if (this.element.Element_SubElementsDBID == undefined) {
+				this.element.Element_SubElementsDBID = new NullInt64
+			}
+			this.element.Element_SubElementsDBID.Int64 = this.element.Element_SubElements_reverse.ID
+			this.element.Element_SubElementsDBID.Valid = true
+			if (this.element.Element_SubElementsDBID_Index == undefined) {
+				this.element.Element_SubElementsDBID_Index = new NullInt64
+			}
+			this.element.Element_SubElementsDBID_Index.Valid = true
+			this.element.Element_SubElements_reverse = new ElementDB // very important, otherwise, circular JSON
+		}
 
 		switch (this.state) {
-			case ParagraphDetailComponentState.UPDATE_INSTANCE:
-				this.paragraphService.updateParagraph(this.paragraph)
-					.subscribe(paragraph => {
-						this.paragraphService.ParagraphServiceChanged.next("update")
+			case ElementDetailComponentState.UPDATE_INSTANCE:
+				this.elementService.updateElement(this.element)
+					.subscribe(element => {
+						this.elementService.ElementServiceChanged.next("update")
 					});
 				break;
 			default:
-				this.paragraphService.postParagraph(this.paragraph).subscribe(paragraph => {
-					this.paragraphService.ParagraphServiceChanged.next("post")
-					this.paragraph = new (ParagraphDB) // reset fields
+				this.elementService.postElement(this.element).subscribe(element => {
+					this.elementService.ElementServiceChanged.next("post")
+					this.element = new (ElementDB) // reset fields
 				});
 		}
 	}
@@ -172,7 +193,7 @@ export class ParagraphDetailComponent implements OnInit {
 		dialogConfig.height = "50%"
 		if (selectionMode == SelectionMode.ONE_MANY_ASSOCIATION_MODE) {
 
-			dialogData.ID = this.paragraph.ID!
+			dialogData.ID = this.element.ID!
 			dialogData.ReversePointer = reverseField
 			dialogData.OrderingMode = false
 			dialogData.SelectionMode = selectionMode
@@ -188,13 +209,13 @@ export class ParagraphDetailComponent implements OnInit {
 			});
 		}
 		if (selectionMode == SelectionMode.MANY_MANY_ASSOCIATION_MODE) {
-			dialogData.ID = this.paragraph.ID!
+			dialogData.ID = this.element.ID!
 			dialogData.ReversePointer = reverseField
 			dialogData.OrderingMode = false
 			dialogData.SelectionMode = selectionMode
 
 			// set up the source
-			dialogData.SourceStruct = "Paragraph"
+			dialogData.SourceStruct = "Element"
 			dialogData.SourceField = sourceField
 
 			// set up the intermediate struct
@@ -224,7 +245,7 @@ export class ParagraphDetailComponent implements OnInit {
 		// dialogConfig.disableClose = true;
 		dialogConfig.autoFocus = true;
 		dialogConfig.data = {
-			ID: this.paragraph.ID,
+			ID: this.element.ID,
 			ReversePointer: reverseField,
 			OrderingMode: true,
 		};
@@ -240,8 +261,8 @@ export class ParagraphDetailComponent implements OnInit {
 	}
 
 	fillUpNameIfEmpty(event: { value: { Name: string; }; }) {
-		if (this.paragraph.Name == undefined) {
-			this.paragraph.Name = event.value.Name
+		if (this.element.Name == undefined) {
+			this.element.Name = event.value.Name
 		}
 	}
 

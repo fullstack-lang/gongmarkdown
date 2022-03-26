@@ -4,21 +4,21 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, combineLatest, BehaviorSubject } from 'rxjs';
 
 // insertion point sub template for services imports 
+import { ElementDB } from './element-db'
+import { ElementService } from './element.service'
+
 import { MarkdownContentDB } from './markdowncontent-db'
 import { MarkdownContentService } from './markdowncontent.service'
-
-import { ParagraphDB } from './paragraph-db'
-import { ParagraphService } from './paragraph.service'
 
 
 // FrontRepo stores all instances in a front repository (design pattern repository)
 export class FrontRepo { // insertion point sub template 
+  Elements_array = new Array<ElementDB>(); // array of repo instances
+  Elements = new Map<number, ElementDB>(); // map of repo instances
+  Elements_batch = new Map<number, ElementDB>(); // same but only in last GET (for finding repo instances to delete)
   MarkdownContents_array = new Array<MarkdownContentDB>(); // array of repo instances
   MarkdownContents = new Map<number, MarkdownContentDB>(); // map of repo instances
   MarkdownContents_batch = new Map<number, MarkdownContentDB>(); // same but only in last GET (for finding repo instances to delete)
-  Paragraphs_array = new Array<ParagraphDB>(); // array of repo instances
-  Paragraphs = new Map<number, ParagraphDB>(); // map of repo instances
-  Paragraphs_batch = new Map<number, ParagraphDB>(); // same but only in last GET (for finding repo instances to delete)
 }
 
 //
@@ -77,8 +77,8 @@ export class FrontRepoService {
 
   constructor(
     private http: HttpClient, // insertion point sub template 
+    private elementService: ElementService,
     private markdowncontentService: MarkdownContentService,
-    private paragraphService: ParagraphService,
   ) { }
 
   // postService provides a post function for each struct name
@@ -109,11 +109,11 @@ export class FrontRepoService {
 
   // typing of observable can be messy in typescript. Therefore, one force the type
   observableFrontRepo: [ // insertion point sub template 
+    Observable<ElementDB[]>,
     Observable<MarkdownContentDB[]>,
-    Observable<ParagraphDB[]>,
   ] = [ // insertion point sub template 
+      this.elementService.getElements(),
       this.markdowncontentService.getMarkdownContents(),
-      this.paragraphService.getParagraphs(),
     ];
 
   //
@@ -129,19 +129,52 @@ export class FrontRepoService {
           this.observableFrontRepo
         ).subscribe(
           ([ // insertion point sub template for declarations 
+            elements_,
             markdowncontents_,
-            paragraphs_,
           ]) => {
             // Typing can be messy with many items. Therefore, type casting is necessary here
             // insertion point sub template for type casting 
+            var elements: ElementDB[]
+            elements = elements_ as ElementDB[]
             var markdowncontents: MarkdownContentDB[]
             markdowncontents = markdowncontents_ as MarkdownContentDB[]
-            var paragraphs: ParagraphDB[]
-            paragraphs = paragraphs_ as ParagraphDB[]
 
             // 
             // First Step: init map of instances
             // insertion point sub template for init 
+            // init the array
+            FrontRepoSingloton.Elements_array = elements
+
+            // clear the map that counts Element in the GET
+            FrontRepoSingloton.Elements_batch.clear()
+
+            elements.forEach(
+              element => {
+                FrontRepoSingloton.Elements.set(element.ID, element)
+                FrontRepoSingloton.Elements_batch.set(element.ID, element)
+              }
+            )
+
+            // clear elements that are absent from the batch
+            FrontRepoSingloton.Elements.forEach(
+              element => {
+                if (FrontRepoSingloton.Elements_batch.get(element.ID) == undefined) {
+                  FrontRepoSingloton.Elements.delete(element.ID)
+                }
+              }
+            )
+
+            // sort Elements_array array
+            FrontRepoSingloton.Elements_array.sort((t1, t2) => {
+              if (t1.Name > t2.Name) {
+                return 1;
+              }
+              if (t1.Name < t2.Name) {
+                return -1;
+              }
+              return 0;
+            });
+
             // init the array
             FrontRepoSingloton.MarkdownContents_array = markdowncontents
 
@@ -175,52 +208,32 @@ export class FrontRepoService {
               return 0;
             });
 
-            // init the array
-            FrontRepoSingloton.Paragraphs_array = paragraphs
-
-            // clear the map that counts Paragraph in the GET
-            FrontRepoSingloton.Paragraphs_batch.clear()
-
-            paragraphs.forEach(
-              paragraph => {
-                FrontRepoSingloton.Paragraphs.set(paragraph.ID, paragraph)
-                FrontRepoSingloton.Paragraphs_batch.set(paragraph.ID, paragraph)
-              }
-            )
-
-            // clear paragraphs that are absent from the batch
-            FrontRepoSingloton.Paragraphs.forEach(
-              paragraph => {
-                if (FrontRepoSingloton.Paragraphs_batch.get(paragraph.ID) == undefined) {
-                  FrontRepoSingloton.Paragraphs.delete(paragraph.ID)
-                }
-              }
-            )
-
-            // sort Paragraphs_array array
-            FrontRepoSingloton.Paragraphs_array.sort((t1, t2) => {
-              if (t1.Name > t2.Name) {
-                return 1;
-              }
-              if (t1.Name < t2.Name) {
-                return -1;
-              }
-              return 0;
-            });
-
 
             // 
             // Second Step: redeem pointers between instances (thanks to maps in the First Step)
             // insertion point sub template for redeem 
-            markdowncontents.forEach(
-              markdowncontent => {
+            elements.forEach(
+              element => {
                 // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
 
                 // insertion point for redeeming ONE-MANY associations
+                // insertion point for slice of pointer field Element.SubElements redeeming
+                {
+                  let _element = FrontRepoSingloton.Elements.get(element.Element_SubElementsDBID.Int64)
+                  if (_element) {
+                    if (_element.SubElements == undefined) {
+                      _element.SubElements = new Array<ElementDB>()
+                    }
+                    _element.SubElements.push(element)
+                    if (element.Element_SubElements_reverse == undefined) {
+                      element.Element_SubElements_reverse = _element
+                    }
+                  }
+                }
               }
             )
-            paragraphs.forEach(
-              paragraph => {
+            markdowncontents.forEach(
+              markdowncontent => {
                 // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
 
                 // insertion point for redeeming ONE-MANY associations
@@ -236,6 +249,70 @@ export class FrontRepoService {
   }
 
   // insertion point for pull per struct 
+
+  // ElementPull performs a GET on Element of the stack and redeem association pointers 
+  ElementPull(): Observable<FrontRepo> {
+    return new Observable<FrontRepo>(
+      (observer) => {
+        combineLatest([
+          this.elementService.getElements()
+        ]).subscribe(
+          ([ // insertion point sub template 
+            elements,
+          ]) => {
+            // init the array
+            FrontRepoSingloton.Elements_array = elements
+
+            // clear the map that counts Element in the GET
+            FrontRepoSingloton.Elements_batch.clear()
+
+            // 
+            // First Step: init map of instances
+            // insertion point sub template 
+            elements.forEach(
+              element => {
+                FrontRepoSingloton.Elements.set(element.ID, element)
+                FrontRepoSingloton.Elements_batch.set(element.ID, element)
+
+                // insertion point for redeeming ONE/ZERO-ONE associations
+
+                // insertion point for redeeming ONE-MANY associations
+                // insertion point for slice of pointer field Element.SubElements redeeming
+                {
+                  let _element = FrontRepoSingloton.Elements.get(element.Element_SubElementsDBID.Int64)
+                  if (_element) {
+                    if (_element.SubElements == undefined) {
+                      _element.SubElements = new Array<ElementDB>()
+                    }
+                    _element.SubElements.push(element)
+                    if (element.Element_SubElements_reverse == undefined) {
+                      element.Element_SubElements_reverse = _element
+                    }
+                  }
+                }
+              }
+            )
+
+            // clear elements that are absent from the GET
+            FrontRepoSingloton.Elements.forEach(
+              element => {
+                if (FrontRepoSingloton.Elements_batch.get(element.ID) == undefined) {
+                  FrontRepoSingloton.Elements.delete(element.ID)
+                }
+              }
+            )
+
+            // 
+            // Second Step: redeem pointers between instances (thanks to maps in the First Step)
+            // insertion point sub template 
+
+            // hand over control flow to observer
+            observer.next(FrontRepoSingloton)
+          }
+        )
+      }
+    )
+  }
 
   // MarkdownContentPull performs a GET on MarkdownContent of the stack and redeem association pointers 
   MarkdownContentPull(): Observable<FrontRepo> {
@@ -287,63 +364,12 @@ export class FrontRepoService {
       }
     )
   }
-
-  // ParagraphPull performs a GET on Paragraph of the stack and redeem association pointers 
-  ParagraphPull(): Observable<FrontRepo> {
-    return new Observable<FrontRepo>(
-      (observer) => {
-        combineLatest([
-          this.paragraphService.getParagraphs()
-        ]).subscribe(
-          ([ // insertion point sub template 
-            paragraphs,
-          ]) => {
-            // init the array
-            FrontRepoSingloton.Paragraphs_array = paragraphs
-
-            // clear the map that counts Paragraph in the GET
-            FrontRepoSingloton.Paragraphs_batch.clear()
-
-            // 
-            // First Step: init map of instances
-            // insertion point sub template 
-            paragraphs.forEach(
-              paragraph => {
-                FrontRepoSingloton.Paragraphs.set(paragraph.ID, paragraph)
-                FrontRepoSingloton.Paragraphs_batch.set(paragraph.ID, paragraph)
-
-                // insertion point for redeeming ONE/ZERO-ONE associations
-
-                // insertion point for redeeming ONE-MANY associations
-              }
-            )
-
-            // clear paragraphs that are absent from the GET
-            FrontRepoSingloton.Paragraphs.forEach(
-              paragraph => {
-                if (FrontRepoSingloton.Paragraphs_batch.get(paragraph.ID) == undefined) {
-                  FrontRepoSingloton.Paragraphs.delete(paragraph.ID)
-                }
-              }
-            )
-
-            // 
-            // Second Step: redeem pointers between instances (thanks to maps in the First Step)
-            // insertion point sub template 
-
-            // hand over control flow to observer
-            observer.next(FrontRepoSingloton)
-          }
-        )
-      }
-    )
-  }
 }
 
 // insertion point for get unique ID per struct 
-export function getMarkdownContentUniqueID(id: number): number {
+export function getElementUniqueID(id: number): number {
   return 31 * id
 }
-export function getParagraphUniqueID(id: number): number {
+export function getMarkdownContentUniqueID(id: number): number {
   return 37 * id
 }

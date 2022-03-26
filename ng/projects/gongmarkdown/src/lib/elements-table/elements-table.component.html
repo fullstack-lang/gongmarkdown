@@ -3,7 +3,7 @@
         <mat-label>Filter</mat-label>
         <input matInput (keyup)="applyFilter($event)" placeholder="Ex. ium" #input>
     </mat-form-field>
-    <h1 *ngIf="dialogData">paragraph</h1>
+    <h1 *ngIf="dialogData">element</h1>
     <table class="table" mat-table [dataSource]="matTableDataSource" matSort>
         <!-- Checkbox Column -->
         <ng-container matColumnDef="select" sticky>
@@ -21,34 +21,41 @@
         <!-- -->
         <ng-container matColumnDef="Name">
             <th mat-header-cell *matHeaderCellDef mat-sort-header> Name </th>
-            <td mat-cell *matCellDef="let Paragraph">
-                {{Paragraph.Name}}
+            <td mat-cell *matCellDef="let Element">
+                {{Element.Name}}
             </td>
         </ng-container>
         <!-- -->
         <ng-container matColumnDef="Content">
             <th mat-header-cell *matHeaderCellDef mat-sort-header> Content </th>
-            <td mat-cell *matCellDef="let Paragraph">
-                {{Paragraph.Content}}
+            <td mat-cell *matCellDef="let Element">
+                {{Element.Content}}
+            </td>
+        </ng-container>
+        <!-- -->
+        <ng-container matColumnDef="Element_SubElements">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> <-- (Element) SubElements </th>
+            <td mat-cell *matCellDef="let element">
+                {{frontRepo.Elements.get(element.Element_SubElementsDBID.Int64)?.Name}}
             </td>
         </ng-container>
 
         <ng-container matColumnDef="ID" sticky>
             <th mat-header-cell *matHeaderCellDef mat-sort-header> ID. </th>
-            <td mat-cell *matCellDef="let Paragraph"> {{Paragraph.ID}} </td>
+            <td mat-cell *matCellDef="let Element"> {{Element.ID}} </td>
         </ng-container>
 
         <ng-container matColumnDef="Edit">
             <th mat-header-cell *matHeaderCellDef> Edit </th>
-            <td mat-cell *matCellDef="let paragraph;  let j = index;">
-                <i class="material-icons" [ngStyle]="{'color':'rgba(0,0,0,.50)'}" (click)="setEditorRouterOutlet(paragraph.ID)">edit</i>
+            <td mat-cell *matCellDef="let element;  let j = index;">
+                <i class="material-icons" [ngStyle]="{'color':'rgba(0,0,0,.50)'}" (click)="setEditorRouterOutlet(element.ID)">edit</i>
             </td>
         </ng-container>
 
         <ng-container matColumnDef="Delete">
             <th mat-header-cell *matHeaderCellDef> Delete </th>
-            <td mat-cell *matCellDef="let paragraph;  let j = index;">
-                <i class="material-icons" [ngStyle]="{'color':'rgba(0,0,0,.50)'}" (click)="deleteParagraph(paragraph.ID, paragraph)">delete</i>
+            <td mat-cell *matCellDef="let element;  let j = index;">
+                <i class="material-icons" [ngStyle]="{'color':'rgba(0,0,0,.50)'}" (click)="deleteElement(element.ID, element)">delete</i>
             </td>
         </ng-container>
 

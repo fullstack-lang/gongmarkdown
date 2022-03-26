@@ -8,10 +8,10 @@ import { FrontRepoService, FrontRepo } from '../front-repo.service'
 import { CommitNbService } from '../commitnb.service'
 
 // insertion point for per struct import code
+import { ElementService } from '../element.service'
+import { getElementUniqueID } from '../front-repo.service'
 import { MarkdownContentService } from '../markdowncontent.service'
 import { getMarkdownContentUniqueID } from '../front-repo.service'
-import { ParagraphService } from '../paragraph.service'
-import { getParagraphUniqueID } from '../front-repo.service'
 
 /**
  * Types of a GongNode / GongFlatNode
@@ -147,8 +147,8 @@ export class SidebarComponent implements OnInit {
     private commitNbService: CommitNbService,
 
     // insertion point for per struct service declaration
+    private elementService: ElementService,
     private markdowncontentService: MarkdownContentService,
-    private paragraphService: ParagraphService,
   ) { }
 
   ngOnInit(): void {
@@ -156,7 +156,7 @@ export class SidebarComponent implements OnInit {
 
     // insertion point for per struct observable for refresh trigger
     // observable for changes in structs
-    this.markdowncontentService.MarkdownContentServiceChanged.subscribe(
+    this.elementService.ElementServiceChanged.subscribe(
       message => {
         if (message == "post" || message == "update" || message == "delete") {
           this.refresh()
@@ -164,7 +164,7 @@ export class SidebarComponent implements OnInit {
       }
     )
     // observable for changes in structs
-    this.paragraphService.ParagraphServiceChanged.subscribe(
+    this.markdowncontentService.MarkdownContentServiceChanged.subscribe(
       message => {
         if (message == "post" || message == "update" || message == "delete") {
           this.refresh()
@@ -195,6 +195,82 @@ export class SidebarComponent implements OnInit {
       this.gongNodeTree = new Array<GongNode>();
       
       // insertion point for per struct tree construction
+      /**
+      * fill up the Element part of the mat tree
+      */
+      let elementGongNodeStruct: GongNode = {
+        name: "Element",
+        type: GongNodeType.STRUCT,
+        id: 0,
+        uniqueIdPerStack: 13 * nonInstanceNodeId,
+        structName: "Element",
+        associationField: "",
+        associatedStructName: "",
+        children: new Array<GongNode>()
+      }
+      nonInstanceNodeId = nonInstanceNodeId + 1
+      this.gongNodeTree.push(elementGongNodeStruct)
+
+      this.frontRepo.Elements_array.sort((t1, t2) => {
+        if (t1.Name > t2.Name) {
+          return 1;
+        }
+        if (t1.Name < t2.Name) {
+          return -1;
+        }
+        return 0;
+      });
+
+      this.frontRepo.Elements_array.forEach(
+        elementDB => {
+          let elementGongNodeInstance: GongNode = {
+            name: elementDB.Name,
+            type: GongNodeType.INSTANCE,
+            id: elementDB.ID,
+            uniqueIdPerStack: getElementUniqueID(elementDB.ID),
+            structName: "Element",
+            associationField: "",
+            associatedStructName: "",
+            children: new Array<GongNode>()
+          }
+          elementGongNodeStruct.children!.push(elementGongNodeInstance)
+
+          // insertion point for per field code
+          /**
+          * let append a node for the slide of pointer SubElements
+          */
+          let SubElementsGongNodeAssociation: GongNode = {
+            name: "(Element) SubElements",
+            type: GongNodeType.ONE__ZERO_MANY_ASSOCIATION,
+            id: elementDB.ID,
+            uniqueIdPerStack: 19 * nonInstanceNodeId,
+            structName: "Element",
+            associationField: "SubElements",
+            associatedStructName: "Element",
+            children: new Array<GongNode>()
+          }
+          nonInstanceNodeId = nonInstanceNodeId + 1
+          elementGongNodeInstance.children.push(SubElementsGongNodeAssociation)
+
+          elementDB.SubElements?.forEach(elementDB => {
+            let elementNode: GongNode = {
+              name: elementDB.Name,
+              type: GongNodeType.INSTANCE,
+              id: elementDB.ID,
+              uniqueIdPerStack: // godel numbering (thank you kurt)
+                7 * getElementUniqueID(elementDB.ID)
+                + 11 * getElementUniqueID(elementDB.ID),
+              structName: "Element",
+              associationField: "",
+              associatedStructName: "",
+              children: new Array<GongNode>()
+            }
+            SubElementsGongNodeAssociation.children.push(elementNode)
+          })
+
+        }
+      )
+
       /**
       * fill up the MarkdownContent part of the mat tree
       */
@@ -234,50 +310,6 @@ export class SidebarComponent implements OnInit {
             children: new Array<GongNode>()
           }
           markdowncontentGongNodeStruct.children!.push(markdowncontentGongNodeInstance)
-
-          // insertion point for per field code
-        }
-      )
-
-      /**
-      * fill up the Paragraph part of the mat tree
-      */
-      let paragraphGongNodeStruct: GongNode = {
-        name: "Paragraph",
-        type: GongNodeType.STRUCT,
-        id: 0,
-        uniqueIdPerStack: 13 * nonInstanceNodeId,
-        structName: "Paragraph",
-        associationField: "",
-        associatedStructName: "",
-        children: new Array<GongNode>()
-      }
-      nonInstanceNodeId = nonInstanceNodeId + 1
-      this.gongNodeTree.push(paragraphGongNodeStruct)
-
-      this.frontRepo.Paragraphs_array.sort((t1, t2) => {
-        if (t1.Name > t2.Name) {
-          return 1;
-        }
-        if (t1.Name < t2.Name) {
-          return -1;
-        }
-        return 0;
-      });
-
-      this.frontRepo.Paragraphs_array.forEach(
-        paragraphDB => {
-          let paragraphGongNodeInstance: GongNode = {
-            name: paragraphDB.Name,
-            type: GongNodeType.INSTANCE,
-            id: paragraphDB.ID,
-            uniqueIdPerStack: getParagraphUniqueID(paragraphDB.ID),
-            structName: "Paragraph",
-            associationField: "",
-            associatedStructName: "",
-            children: new Array<GongNode>()
-          }
-          paragraphGongNodeStruct.children!.push(paragraphGongNodeInstance)
 
           // insertion point for per field code
         }

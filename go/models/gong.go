@@ -20,11 +20,11 @@ var __member __void
 // StageStruct enables storage of staged instances
 // swagger:ignore
 type StageStruct struct { // insertion point for definition of arrays registering instances
+	Elements           map[*Element]struct{}
+	Elements_mapString map[string]*Element
+
 	MarkdownContents           map[*MarkdownContent]struct{}
 	MarkdownContents_mapString map[string]*MarkdownContent
-
-	Paragraphs           map[*Paragraph]struct{}
-	Paragraphs_mapString map[string]*Paragraph
 
 	AllModelsStructCreateCallback AllModelsStructCreateInterface
 
@@ -53,21 +53,21 @@ type BackRepoInterface interface {
 	BackupXL(stage *StageStruct, dirPath string)
 	RestoreXL(stage *StageStruct, dirPath string)
 	// insertion point for Commit and Checkout signatures
+	CommitElement(element *Element)
+	CheckoutElement(element *Element)
 	CommitMarkdownContent(markdowncontent *MarkdownContent)
 	CheckoutMarkdownContent(markdowncontent *MarkdownContent)
-	CommitParagraph(paragraph *Paragraph)
-	CheckoutParagraph(paragraph *Paragraph)
 	GetLastCommitFromBackNb() uint
 	GetLastPushFromFrontNb() uint
 }
 
 // swagger:ignore instructs the gong compiler (gongc) to avoid this particular struct
 var Stage StageStruct = StageStruct{ // insertion point for array initiatialisation
+	Elements:           make(map[*Element]struct{}),
+	Elements_mapString: make(map[string]*Element),
+
 	MarkdownContents:           make(map[*MarkdownContent]struct{}),
 	MarkdownContents_mapString: make(map[string]*MarkdownContent),
-
-	Paragraphs:           make(map[*Paragraph]struct{}),
-	Paragraphs_mapString: make(map[string]*Paragraph),
 
 	// end of insertion point
 	Map_GongStructName_InstancesNb: make(map[string]int),
@@ -79,8 +79,8 @@ func (stage *StageStruct) Commit() {
 	}
 
 	// insertion point for computing the map of number of instances per gongstruct
+	stage.Map_GongStructName_InstancesNb["Element"] = len(stage.Elements)
 	stage.Map_GongStructName_InstancesNb["MarkdownContent"] = len(stage.MarkdownContents)
-	stage.Map_GongStructName_InstancesNb["Paragraph"] = len(stage.Paragraphs)
 
 }
 
@@ -119,6 +119,108 @@ func (stage *StageStruct) RestoreXL(dirPath string) {
 }
 
 // insertion point for cumulative sub template with model space calls
+func (stage *StageStruct) getElementOrderedStructWithNameField() []*Element {
+	// have alphabetical order generation
+	elementOrdered := []*Element{}
+	for element := range stage.Elements {
+		elementOrdered = append(elementOrdered, element)
+	}
+	sort.Slice(elementOrdered[:], func(i, j int) bool {
+		return elementOrdered[i].Name < elementOrdered[j].Name
+	})
+	return elementOrdered
+}
+
+// Stage puts element to the model stage
+func (element *Element) Stage() *Element {
+	Stage.Elements[element] = __member
+	Stage.Elements_mapString[element.Name] = element
+
+	return element
+}
+
+// Unstage removes element off the model stage
+func (element *Element) Unstage() *Element {
+	delete(Stage.Elements, element)
+	delete(Stage.Elements_mapString, element.Name)
+	return element
+}
+
+// commit element to the back repo (if it is already staged)
+func (element *Element) Commit() *Element {
+	if _, ok := Stage.Elements[element]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CommitElement(element)
+		}
+	}
+	return element
+}
+
+// Checkout element to the back repo (if it is already staged)
+func (element *Element) Checkout() *Element {
+	if _, ok := Stage.Elements[element]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CheckoutElement(element)
+		}
+	}
+	return element
+}
+
+//
+// Legacy, to be deleted
+//
+
+// StageCopy appends a copy of element to the model stage
+func (element *Element) StageCopy() *Element {
+	_element := new(Element)
+	*_element = *element
+	_element.Stage()
+	return _element
+}
+
+// StageAndCommit appends element to the model stage and commit to the orm repo
+func (element *Element) StageAndCommit() *Element {
+	element.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMElement(element)
+	}
+	return element
+}
+
+// DeleteStageAndCommit appends element to the model stage and commit to the orm repo
+func (element *Element) DeleteStageAndCommit() *Element {
+	element.Unstage()
+	DeleteORMElement(element)
+	return element
+}
+
+// StageCopyAndCommit appends a copy of element to the model stage and commit to the orm repo
+func (element *Element) StageCopyAndCommit() *Element {
+	_element := new(Element)
+	*_element = *element
+	_element.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMElement(element)
+	}
+	return _element
+}
+
+// CreateORMElement enables dynamic staging of a Element instance
+func CreateORMElement(element *Element) {
+	element.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMElement(element)
+	}
+}
+
+// DeleteORMElement enables dynamic staging of a Element instance
+func DeleteORMElement(element *Element) {
+	element.Unstage()
+	if Stage.AllModelsStructDeleteCallback != nil {
+		Stage.AllModelsStructDeleteCallback.DeleteORMElement(element)
+	}
+}
+
 func (stage *StageStruct) getMarkdownContentOrderedStructWithNameField() []*MarkdownContent {
 	// have alphabetical order generation
 	markdowncontentOrdered := []*MarkdownContent{}
@@ -221,134 +323,32 @@ func DeleteORMMarkdownContent(markdowncontent *MarkdownContent) {
 	}
 }
 
-func (stage *StageStruct) getParagraphOrderedStructWithNameField() []*Paragraph {
-	// have alphabetical order generation
-	paragraphOrdered := []*Paragraph{}
-	for paragraph := range stage.Paragraphs {
-		paragraphOrdered = append(paragraphOrdered, paragraph)
-	}
-	sort.Slice(paragraphOrdered[:], func(i, j int) bool {
-		return paragraphOrdered[i].Name < paragraphOrdered[j].Name
-	})
-	return paragraphOrdered
-}
-
-// Stage puts paragraph to the model stage
-func (paragraph *Paragraph) Stage() *Paragraph {
-	Stage.Paragraphs[paragraph] = __member
-	Stage.Paragraphs_mapString[paragraph.Name] = paragraph
-
-	return paragraph
-}
-
-// Unstage removes paragraph off the model stage
-func (paragraph *Paragraph) Unstage() *Paragraph {
-	delete(Stage.Paragraphs, paragraph)
-	delete(Stage.Paragraphs_mapString, paragraph.Name)
-	return paragraph
-}
-
-// commit paragraph to the back repo (if it is already staged)
-func (paragraph *Paragraph) Commit() *Paragraph {
-	if _, ok := Stage.Paragraphs[paragraph]; ok {
-		if Stage.BackRepo != nil {
-			Stage.BackRepo.CommitParagraph(paragraph)
-		}
-	}
-	return paragraph
-}
-
-// Checkout paragraph to the back repo (if it is already staged)
-func (paragraph *Paragraph) Checkout() *Paragraph {
-	if _, ok := Stage.Paragraphs[paragraph]; ok {
-		if Stage.BackRepo != nil {
-			Stage.BackRepo.CheckoutParagraph(paragraph)
-		}
-	}
-	return paragraph
-}
-
-//
-// Legacy, to be deleted
-//
-
-// StageCopy appends a copy of paragraph to the model stage
-func (paragraph *Paragraph) StageCopy() *Paragraph {
-	_paragraph := new(Paragraph)
-	*_paragraph = *paragraph
-	_paragraph.Stage()
-	return _paragraph
-}
-
-// StageAndCommit appends paragraph to the model stage and commit to the orm repo
-func (paragraph *Paragraph) StageAndCommit() *Paragraph {
-	paragraph.Stage()
-	if Stage.AllModelsStructCreateCallback != nil {
-		Stage.AllModelsStructCreateCallback.CreateORMParagraph(paragraph)
-	}
-	return paragraph
-}
-
-// DeleteStageAndCommit appends paragraph to the model stage and commit to the orm repo
-func (paragraph *Paragraph) DeleteStageAndCommit() *Paragraph {
-	paragraph.Unstage()
-	DeleteORMParagraph(paragraph)
-	return paragraph
-}
-
-// StageCopyAndCommit appends a copy of paragraph to the model stage and commit to the orm repo
-func (paragraph *Paragraph) StageCopyAndCommit() *Paragraph {
-	_paragraph := new(Paragraph)
-	*_paragraph = *paragraph
-	_paragraph.Stage()
-	if Stage.AllModelsStructCreateCallback != nil {
-		Stage.AllModelsStructCreateCallback.CreateORMParagraph(paragraph)
-	}
-	return _paragraph
-}
-
-// CreateORMParagraph enables dynamic staging of a Paragraph instance
-func CreateORMParagraph(paragraph *Paragraph) {
-	paragraph.Stage()
-	if Stage.AllModelsStructCreateCallback != nil {
-		Stage.AllModelsStructCreateCallback.CreateORMParagraph(paragraph)
-	}
-}
-
-// DeleteORMParagraph enables dynamic staging of a Paragraph instance
-func DeleteORMParagraph(paragraph *Paragraph) {
-	paragraph.Unstage()
-	if Stage.AllModelsStructDeleteCallback != nil {
-		Stage.AllModelsStructDeleteCallback.DeleteORMParagraph(paragraph)
-	}
-}
-
 // swagger:ignore
 type AllModelsStructCreateInterface interface { // insertion point for Callbacks on creation
+	CreateORMElement(Element *Element)
 	CreateORMMarkdownContent(MarkdownContent *MarkdownContent)
-	CreateORMParagraph(Paragraph *Paragraph)
 }
 
 type AllModelsStructDeleteInterface interface { // insertion point for Callbacks on deletion
+	DeleteORMElement(Element *Element)
 	DeleteORMMarkdownContent(MarkdownContent *MarkdownContent)
-	DeleteORMParagraph(Paragraph *Paragraph)
 }
 
 func (stage *StageStruct) Reset() { // insertion point for array reset
+	stage.Elements = make(map[*Element]struct{})
+	stage.Elements_mapString = make(map[string]*Element)
+
 	stage.MarkdownContents = make(map[*MarkdownContent]struct{})
 	stage.MarkdownContents_mapString = make(map[string]*MarkdownContent)
-
-	stage.Paragraphs = make(map[*Paragraph]struct{})
-	stage.Paragraphs_mapString = make(map[string]*Paragraph)
 
 }
 
 func (stage *StageStruct) Nil() { // insertion point for array nil
+	stage.Elements = nil
+	stage.Elements_mapString = nil
+
 	stage.MarkdownContents = nil
 	stage.MarkdownContents_mapString = nil
-
-	stage.Paragraphs = nil
-	stage.Paragraphs_mapString = nil
 
 }
 
@@ -426,6 +426,44 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 	setValueField := ""
 
 	// insertion initialization of objects to stage
+	map_Element_Identifiers := make(map[*Element]string)
+	_ = map_Element_Identifiers
+
+	elementOrdered := []*Element{}
+	for element := range stage.Elements {
+		elementOrdered = append(elementOrdered, element)
+	}
+	sort.Slice(elementOrdered[:], func(i, j int) bool {
+		return elementOrdered[i].Name < elementOrdered[j].Name
+	})
+	identifiersDecl += fmt.Sprintf("\n\n	// Declarations of staged instances of Element")
+	for idx, element := range elementOrdered {
+
+		id = generatesIdentifier("Element", idx, element.Name)
+		map_Element_Identifiers[element] = id
+
+		decl = IdentifiersDecls
+		decl = strings.ReplaceAll(decl, "{{Identifier}}", id)
+		decl = strings.ReplaceAll(decl, "{{GeneratedStructName}}", "Element")
+		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", element.Name)
+		identifiersDecl += decl
+
+		initializerStatements += fmt.Sprintf("\n\n	// Element %s values setup", element.Name)
+		// Initialisation of values
+		setValueField = StringInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Name")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(element.Name))
+		initializerStatements += setValueField
+
+		setValueField = StringInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Content")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(element.Content))
+		initializerStatements += setValueField
+
+	}
+
 	map_MarkdownContent_Identifiers := make(map[*MarkdownContent]string)
 	_ = map_MarkdownContent_Identifiers
 
@@ -464,61 +502,31 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 
 	}
 
-	map_Paragraph_Identifiers := make(map[*Paragraph]string)
-	_ = map_Paragraph_Identifiers
-
-	paragraphOrdered := []*Paragraph{}
-	for paragraph := range stage.Paragraphs {
-		paragraphOrdered = append(paragraphOrdered, paragraph)
-	}
-	sort.Slice(paragraphOrdered[:], func(i, j int) bool {
-		return paragraphOrdered[i].Name < paragraphOrdered[j].Name
-	})
-	identifiersDecl += fmt.Sprintf("\n\n	// Declarations of staged instances of Paragraph")
-	for idx, paragraph := range paragraphOrdered {
-
-		id = generatesIdentifier("Paragraph", idx, paragraph.Name)
-		map_Paragraph_Identifiers[paragraph] = id
-
-		decl = IdentifiersDecls
-		decl = strings.ReplaceAll(decl, "{{Identifier}}", id)
-		decl = strings.ReplaceAll(decl, "{{GeneratedStructName}}", "Paragraph")
-		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", paragraph.Name)
-		identifiersDecl += decl
-
-		initializerStatements += fmt.Sprintf("\n\n	// Paragraph %s values setup", paragraph.Name)
-		// Initialisation of values
-		setValueField = StringInitStatement
-		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
-		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Name")
-		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(paragraph.Name))
-		initializerStatements += setValueField
-
-		setValueField = StringInitStatement
-		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
-		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Content")
-		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(paragraph.Content))
-		initializerStatements += setValueField
-
-	}
-
 	// insertion initialization of objects to stage
+	for idx, element := range elementOrdered {
+		var setPointerField string
+		_ = setPointerField
+
+		id = generatesIdentifier("Element", idx, element.Name)
+		map_Element_Identifiers[element] = id
+
+		// Initialisation of values
+		for _, _element := range element.SubElements {
+			setPointerField = SliceOfPointersFieldInitStatement
+			setPointerField = strings.ReplaceAll(setPointerField, "{{Identifier}}", id)
+			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldName}}", "SubElements")
+			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldNameValue}}", map_Element_Identifiers[_element])
+			pointersInitializesStatements += setPointerField
+		}
+
+	}
+
 	for idx, markdowncontent := range markdowncontentOrdered {
 		var setPointerField string
 		_ = setPointerField
 
 		id = generatesIdentifier("MarkdownContent", idx, markdowncontent.Name)
 		map_MarkdownContent_Identifiers[markdowncontent] = id
-
-		// Initialisation of values
-	}
-
-	for idx, paragraph := range paragraphOrdered {
-		var setPointerField string
-		_ = setPointerField
-
-		id = generatesIdentifier("Paragraph", idx, paragraph.Name)
-		map_Paragraph_Identifiers[paragraph] = id
 
 		// Initialisation of values
 	}

@@ -1,6 +1,8 @@
 package models
 
-type Paragraph struct {
+type Element struct {
 	Name    string
 	Content string
+
+	SubElements []*Element
 }

@@ -13,14 +13,14 @@ import (
 )
 
 // declaration in order to justify use of the models import
-var __Paragraph__dummysDeclaration__ models.Paragraph
-var __Paragraph_time__dummyDeclaration time.Duration
+var __Element__dummysDeclaration__ models.Element
+var __Element_time__dummyDeclaration time.Duration
 
-// An ParagraphID parameter model.
+// An ElementID parameter model.
 //
 // This is used for operations that want the ID of an order in the path
-// swagger:parameters getParagraph updateParagraph deleteParagraph
-type ParagraphID struct {
+// swagger:parameters getElement updateElement deleteElement
+type ElementID struct {
 	// The ID of the order
 	//
 	// in: path
@@ -28,30 +28,30 @@ type ParagraphID struct {
 	ID int64
 }
 
-// ParagraphInput is a schema that can validate the user’s
+// ElementInput is a schema that can validate the user’s
 // input to prevent us from getting invalid data
-// swagger:parameters postParagraph updateParagraph
-type ParagraphInput struct {
-	// The Paragraph to submit or modify
+// swagger:parameters postElement updateElement
+type ElementInput struct {
+	// The Element to submit or modify
 	// in: body
-	Paragraph *orm.ParagraphAPI
+	Element *orm.ElementAPI
 }
 
-// GetParagraphs
+// GetElements
 //
-// swagger:route GET /paragraphs paragraphs getParagraphs
+// swagger:route GET /elements elements getElements
 //
-// Get all paragraphs
+// Get all elements
 //
 // Responses:
 //    default: genericError
-//        200: paragraphDBsResponse
-func GetParagraphs(c *gin.Context) {
-	db := orm.BackRepo.BackRepoParagraph.GetDB()
+//        200: elementDBsResponse
+func GetElements(c *gin.Context) {
+	db := orm.BackRepo.BackRepoElement.GetDB()
 
 	// source slice
-	var paragraphDBs []orm.ParagraphDB
-	query := db.Find(&paragraphDBs)
+	var elementDBs []orm.ElementDB
+	query := db.Find(&elementDBs)
 	if query.Error != nil {
 		var returnError GenericError
 		returnError.Body.Code = http.StatusBadRequest
@@ -62,29 +62,29 @@ func GetParagraphs(c *gin.Context) {
 	}
 
 	// slice that will be transmitted to the front
-	paragraphAPIs := make([]orm.ParagraphAPI, 0)
+	elementAPIs := make([]orm.ElementAPI, 0)
 
-	// for each paragraph, update fields from the database nullable fields
-	for idx := range paragraphDBs {
-		paragraphDB := &paragraphDBs[idx]
-		_ = paragraphDB
-		var paragraphAPI orm.ParagraphAPI
+	// for each element, update fields from the database nullable fields
+	for idx := range elementDBs {
+		elementDB := &elementDBs[idx]
+		_ = elementDB
+		var elementAPI orm.ElementAPI
 
 		// insertion point for updating fields
-		paragraphAPI.ID = paragraphDB.ID
-		paragraphDB.CopyBasicFieldsToParagraph(&paragraphAPI.Paragraph)
-		paragraphAPI.ParagraphPointersEnconding = paragraphDB.ParagraphPointersEnconding
-		paragraphAPIs = append(paragraphAPIs, paragraphAPI)
+		elementAPI.ID = elementDB.ID
+		elementDB.CopyBasicFieldsToElement(&elementAPI.Element)
+		elementAPI.ElementPointersEnconding = elementDB.ElementPointersEnconding
+		elementAPIs = append(elementAPIs, elementAPI)
 	}
 
-	c.JSON(http.StatusOK, paragraphAPIs)
+	c.JSON(http.StatusOK, elementAPIs)
 }
 
-// PostParagraph
+// PostElement
 //
-// swagger:route POST /paragraphs paragraphs postParagraph
+// swagger:route POST /elements elements postElement
 //
-// Creates a paragraph
+// Creates a element
 //     Consumes:
 //     - application/json
 //
@@ -92,12 +92,12 @@ func GetParagraphs(c *gin.Context) {
 //     - application/json
 //
 //     Responses:
-//       200: paragraphDBResponse
-func PostParagraph(c *gin.Context) {
-	db := orm.BackRepo.BackRepoParagraph.GetDB()
+//       200: elementDBResponse
+func PostElement(c *gin.Context) {
+	db := orm.BackRepo.BackRepoElement.GetDB()
 
 	// Validate input
-	var input orm.ParagraphAPI
+	var input orm.ElementAPI
 
 	err := c.ShouldBindJSON(&input)
 	if err != nil {
@@ -109,12 +109,12 @@ func PostParagraph(c *gin.Context) {
 		return
 	}
 
-	// Create paragraph
-	paragraphDB := orm.ParagraphDB{}
-	paragraphDB.ParagraphPointersEnconding = input.ParagraphPointersEnconding
-	paragraphDB.CopyBasicFieldsFromParagraph(&input.Paragraph)
+	// Create element
+	elementDB := orm.ElementDB{}
+	elementDB.ElementPointersEnconding = input.ElementPointersEnconding
+	elementDB.CopyBasicFieldsFromElement(&input.Element)
 
-	query := db.Create(&paragraphDB)
+	query := db.Create(&elementDB)
 	if query.Error != nil {
 		var returnError GenericError
 		returnError.Body.Code = http.StatusBadRequest
@@ -128,24 +128,24 @@ func PostParagraph(c *gin.Context) {
 	// (this will be improved with implementation of unit of work design pattern)
 	orm.BackRepo.IncrementPushFromFrontNb()
 
-	c.JSON(http.StatusOK, paragraphDB)
+	c.JSON(http.StatusOK, elementDB)
 }
 
-// GetParagraph
+// GetElement
 //
-// swagger:route GET /paragraphs/{ID} paragraphs getParagraph
+// swagger:route GET /elements/{ID} elements getElement
 //
-// Gets the details for a paragraph.
+// Gets the details for a element.
 //
 // Responses:
 //    default: genericError
-//        200: paragraphDBResponse
-func GetParagraph(c *gin.Context) {
-	db := orm.BackRepo.BackRepoParagraph.GetDB()
+//        200: elementDBResponse
+func GetElement(c *gin.Context) {
+	db := orm.BackRepo.BackRepoElement.GetDB()
 
-	// Get paragraphDB in DB
-	var paragraphDB orm.ParagraphDB
-	if err := db.First(&paragraphDB, c.Param("id")).Error; err != nil {
+	// Get elementDB in DB
+	var elementDB orm.ElementDB
+	if err := db.First(&elementDB, c.Param("id")).Error; err != nil {
 		var returnError GenericError
 		returnError.Body.Code = http.StatusBadRequest
 		returnError.Body.Message = err.Error()
@@ -154,31 +154,31 @@ func GetParagraph(c *gin.Context) {
 		return
 	}
 
-	var paragraphAPI orm.ParagraphAPI
-	paragraphAPI.ID = paragraphDB.ID
-	paragraphAPI.ParagraphPointersEnconding = paragraphDB.ParagraphPointersEnconding
-	paragraphDB.CopyBasicFieldsToParagraph(&paragraphAPI.Paragraph)
+	var elementAPI orm.ElementAPI
+	elementAPI.ID = elementDB.ID
+	elementAPI.ElementPointersEnconding = elementDB.ElementPointersEnconding
+	elementDB.CopyBasicFieldsToElement(&elementAPI.Element)
 
-	c.JSON(http.StatusOK, paragraphAPI)
+	c.JSON(http.StatusOK, elementAPI)
 }
 
-// UpdateParagraph
+// UpdateElement
 //
-// swagger:route PATCH /paragraphs/{ID} paragraphs updateParagraph
+// swagger:route PATCH /elements/{ID} elements updateElement
 //
-// Update a paragraph
+// Update a element
 //
 // Responses:
 //    default: genericError
-//        200: paragraphDBResponse
-func UpdateParagraph(c *gin.Context) {
-	db := orm.BackRepo.BackRepoParagraph.GetDB()
+//        200: elementDBResponse
+func UpdateElement(c *gin.Context) {
+	db := orm.BackRepo.BackRepoElement.GetDB()
 
 	// Get model if exist
-	var paragraphDB orm.ParagraphDB
+	var elementDB orm.ElementDB
 
-	// fetch the paragraph
-	query := db.First(&paragraphDB, c.Param("id"))
+	// fetch the element
+	query := db.First(&elementDB, c.Param("id"))
 
 	if query.Error != nil {
 		var returnError GenericError
@@ -190,7 +190,7 @@ func UpdateParagraph(c *gin.Context) {
 	}
 
 	// Validate input
-	var input orm.ParagraphAPI
+	var input orm.ElementAPI
 	if err := c.ShouldBindJSON(&input); err != nil {
 		log.Println(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -198,10 +198,10 @@ func UpdateParagraph(c *gin.Context) {
 	}
 
 	// update
-	paragraphDB.CopyBasicFieldsFromParagraph(&input.Paragraph)
-	paragraphDB.ParagraphPointersEnconding = input.ParagraphPointersEnconding
+	elementDB.CopyBasicFieldsFromElement(&input.Element)
+	elementDB.ElementPointersEnconding = input.ElementPointersEnconding
 
-	query = db.Model(&paragraphDB).Updates(paragraphDB)
+	query = db.Model(&elementDB).Updates(elementDB)
 	if query.Error != nil {
 		var returnError GenericError
 		returnError.Body.Code = http.StatusBadRequest
@@ -215,24 +215,24 @@ func UpdateParagraph(c *gin.Context) {
 	// (this will be improved with implementation of unit of work design pattern)
 	orm.BackRepo.IncrementPushFromFrontNb()
 
-	// return status OK with the marshalling of the the paragraphDB
-	c.JSON(http.StatusOK, paragraphDB)
+	// return status OK with the marshalling of the the elementDB
+	c.JSON(http.StatusOK, elementDB)
 }
 
-// DeleteParagraph
+// DeleteElement
 //
-// swagger:route DELETE /paragraphs/{ID} paragraphs deleteParagraph
+// swagger:route DELETE /elements/{ID} elements deleteElement
 //
-// Delete a paragraph
+// Delete a element
 //
 // Responses:
 //    default: genericError
-func DeleteParagraph(c *gin.Context) {
-	db := orm.BackRepo.BackRepoParagraph.GetDB()
+func DeleteElement(c *gin.Context) {
+	db := orm.BackRepo.BackRepoElement.GetDB()
 
 	// Get model if exist
-	var paragraphDB orm.ParagraphDB
-	if err := db.First(&paragraphDB, c.Param("id")).Error; err != nil {
+	var elementDB orm.ElementDB
+	if err := db.First(&elementDB, c.Param("id")).Error; err != nil {
 		var returnError GenericError
 		returnError.Body.Code = http.StatusBadRequest
 		returnError.Body.Message = err.Error()
@@ -242,7 +242,7 @@ func DeleteParagraph(c *gin.Context) {
 	}
 
 	// with gorm.Model field, default delete is a soft delete. Unscoped() force delete
-	db.Unscoped().Delete(&paragraphDB)
+	db.Unscoped().Delete(&elementDB)
 
 	// a DELETE generates a back repo commit increase
 	// (this will be improved with implementation of unit of work design pattern)

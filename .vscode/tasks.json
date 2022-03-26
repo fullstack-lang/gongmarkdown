@@ -30,6 +30,22 @@
 			"group": "build"
 		},
 		{
+			"label": "02 - run gongmarkdown w/o diagrams w marshall",
+			"type": "shell",
+			"options": {
+				"cwd": "${workspaceFolder}/go/cmd/gongmarkdown"
+			},
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"-diagrams=false",
+				"-unmarshall=stage",
+				"-marshallOnCommit=stage",
+			],
+			"group": "build"
+		},
+		{
 			"label": "03 - lsof -i tcp:8080 ",
 			"type": "shell",
 			"command": "lsof -i tcp:8080 ",
