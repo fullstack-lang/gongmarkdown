@@ -70,9 +70,8 @@ type ElementDB struct {
 	// Declation for basic field elementDB.Content {{BasicKind}} (to be completed)
 	Content_Data sql.NullString
 
-	// Declation for basic field elementDB.IsTitle bool (to be completed)
-	// provide the sql storage for the boolan
-	IsTitle_Data sql.NullBool
+	// Declation for basic field elementDB.Type {{BasicKind}} (to be completed)
+	Type_Data sql.NullString
 	// encoding of pointers
 	ElementPointersEnconding
 }
@@ -98,7 +97,7 @@ type ElementWOP struct {
 
 	Content string `xlsx:"2"`
 
-	IsTitle bool `xlsx:"3"`
+	Type models.ElementType `xlsx:"3"`
 	// insertion for WOP pointer fields
 }
 
@@ -107,7 +106,7 @@ var Element_Fields = []string{
 	"ID",
 	"Name",
 	"Content",
-	"IsTitle",
+	"Type",
 }
 
 type BackRepoElementStruct struct {
@@ -441,8 +440,8 @@ func (elementDB *ElementDB) CopyBasicFieldsFromElement(element *models.Element) 
 	elementDB.Content_Data.String = element.Content
 	elementDB.Content_Data.Valid = true
 
-	elementDB.IsTitle_Data.Bool = element.IsTitle
-	elementDB.IsTitle_Data.Valid = true
+	elementDB.Type_Data.String = element.Type.ToString()
+	elementDB.Type_Data.Valid = true
 }
 
 // CopyBasicFieldsFromElementWOP
@@ -455,8 +454,8 @@ func (elementDB *ElementDB) CopyBasicFieldsFromElementWOP(element *ElementWOP) {
 	elementDB.Content_Data.String = element.Content
 	elementDB.Content_Data.Valid = true
 
-	elementDB.IsTitle_Data.Bool = element.IsTitle
-	elementDB.IsTitle_Data.Valid = true
+	elementDB.Type_Data.String = element.Type.ToString()
+	elementDB.Type_Data.Valid = true
 }
 
 // CopyBasicFieldsToElement
@@ -464,7 +463,7 @@ func (elementDB *ElementDB) CopyBasicFieldsToElement(element *models.Element) {
 	// insertion point for checkout of basic fields (back repo to stage)
 	element.Name = elementDB.Name_Data.String
 	element.Content = elementDB.Content_Data.String
-	element.IsTitle = elementDB.IsTitle_Data.Bool
+	element.Type.FromString(elementDB.Type_Data.String)
 }
 
 // CopyBasicFieldsToElementWOP
@@ -473,7 +472,7 @@ func (elementDB *ElementDB) CopyBasicFieldsToElementWOP(element *ElementWOP) {
 	// insertion point for checkout of basic fields (back repo to stage)
 	element.Name = elementDB.Name_Data.String
 	element.Content = elementDB.Content_Data.String
-	element.IsTitle = elementDB.IsTitle_Data.Bool
+	element.Type.FromString(elementDB.Type_Data.String)
 }
 
 // Backup generates a json file from a slice of all ElementDB instances in the backrepo

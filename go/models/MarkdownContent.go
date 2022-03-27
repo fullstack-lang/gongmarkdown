@@ -22,17 +22,18 @@ func (markdownContent *MarkdownContent) UpdateContent() {
 
 func (markdownContent *MarkdownContent) RecursiveUpdateContent(element *Element, depth int) {
 
-	if element.IsTitle {
+	switch element.GetType() {
+	case TITLE:
 		for level := 0; level < depth; level++ {
 			markdownContent.Content = markdownContent.Content + "#"
 		}
 		markdownContent.Content = markdownContent.Content + " "
 	}
 
-	markdownContent.Content = markdownContent.Content + element.Content
+	markdownContent.Content = markdownContent.Content + element.GetContent()
 	markdownContent.Content = markdownContent.Content + "\n\n"
 
-	for _, subElement := range element.SubElements {
+	for _, subElement := range element.GetSubElements() {
 		markdownContent.RecursiveUpdateContent(subElement, depth+1)
 	}
 

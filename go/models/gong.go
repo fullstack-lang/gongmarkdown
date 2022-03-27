@@ -462,11 +462,13 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(element.Content))
 		initializerStatements += setValueField
 
-		setValueField = NumberInitStatement
-		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
-		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "IsTitle")
-		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", fmt.Sprintf("%t", element.IsTitle))
-		initializerStatements += setValueField
+		if element.Type != "" {
+			setValueField = StringEnumInitStatement
+			setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+			setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Type")
+			setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", "models."+element.Type.ToCodeString())
+			initializerStatements += setValueField
+		}
 
 	}
 
@@ -569,3 +571,48 @@ func generatesIdentifier(gongStructName string, idx int, instanceName string) (i
 }
 
 // insertion point of enum utility functions
+// Utility function for ElementType
+// if enum values are string, it is stored with the value
+// if enum values are int, they are stored with the code of the value
+func (elementtype ElementType) ToString() (res string) {
+
+	// migration of former implementation of enum
+	switch elementtype {
+	// insertion code per enum code
+	case PARAGRAPH:
+		res = "Paragraph"
+	case TABLE:
+		res = "Table"
+	case TITLE:
+		res = "Title"
+	}
+	return
+}
+
+func (elementtype *ElementType) FromString(input string) {
+
+	switch input {
+	// insertion code per enum code
+	case "Paragraph":
+		*elementtype = PARAGRAPH
+	case "Table":
+		*elementtype = TABLE
+	case "Title":
+		*elementtype = TITLE
+	}
+}
+
+func (elementtype *ElementType) ToCodeString() (res string) {
+
+	switch *elementtype {
+	// insertion code per enum code
+	case PARAGRAPH:
+		res = "PARAGRAPH"
+	case TABLE:
+		res = "TABLE"
+	case TITLE:
+		res = "TITLE"
+	}
+	return
+}
+

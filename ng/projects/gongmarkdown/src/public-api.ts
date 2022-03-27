@@ -29,3 +29,4 @@ export * from './lib/markdowncontent-db'
 export * from './lib/markdowncontent.service'
 
 
+export * from './lib/ElementType'

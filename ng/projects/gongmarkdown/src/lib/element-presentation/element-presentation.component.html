@@ -17,11 +17,8 @@
         <td class="mat-cell">{{element.Content}}</td>
     </tr>
     <tr class="mat-row">
-        <td class="mat-cell">IsTitle</td>
-        <td class="mat-cell">
-            <mat-checkbox [checked]="element.IsTitle" disabled=true>
-            </mat-checkbox>
-        </td>
+        <td class="mat-cell">Type</td>
+        <td class="mat-cell">{{element.Type}}</td>
     </tr>
 </table>
 <!-- hack to force loading of mat table style an error is generated but it is a know angular issue https://github.com/angular/components/issues/10941 -->

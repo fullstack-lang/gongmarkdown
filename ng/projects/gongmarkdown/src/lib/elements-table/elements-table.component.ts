@@ -74,8 +74,8 @@ export class ElementsTableComponent implements OnInit {
         case 'Content':
           return elementDB.Content;
 
-        case 'IsTitle':
-          return elementDB.IsTitle?"true":"false";
+        case 'Type':
+          return elementDB.Type;
 
         case 'Element_SubElements':
           return this.frontRepo.Elements.get(elementDB.Element_SubElementsDBID.Int64)!.Name;
@@ -96,6 +96,7 @@ export class ElementsTableComponent implements OnInit {
       // insertion point for merging of fields
       mergedContent += elementDB.Name.toLowerCase()
       mergedContent += elementDB.Content.toLowerCase()
+      mergedContent += elementDB.Type.toLowerCase()
       if (elementDB.Element_SubElementsDBID.Int64 != 0) {
         mergedContent += this.frontRepo.Elements.get(elementDB.Element_SubElementsDBID.Int64)!.Name.toLowerCase()
       }
@@ -152,14 +153,14 @@ export class ElementsTableComponent implements OnInit {
       this.displayedColumns = ['ID', 'Edit', 'Delete', // insertion point for columns to display
         "Name",
         "Content",
-        "IsTitle",
+        "Type",
         "Element_SubElements",
       ]
     } else {
       this.displayedColumns = ['select', 'ID', // insertion point for columns to display
         "Name",
         "Content",
-        "IsTitle",
+        "Type",
         "Element_SubElements",
       ]
       this.selection = new SelectionModel<ElementDB>(allowMultiSelect, this.initialSelection);

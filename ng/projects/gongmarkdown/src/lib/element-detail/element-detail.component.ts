@@ -10,6 +10,7 @@ import { MapOfComponents } from '../map-components'
 import { MapOfSortingComponents } from '../map-components'
 
 // insertion point for imports
+import { ElementTypeSelect, ElementTypeList } from '../ElementType'
 
 import { Router, RouterState, ActivatedRoute } from '@angular/router';
 
@@ -34,7 +35,7 @@ enum ElementDetailComponentState {
 export class ElementDetailComponent implements OnInit {
 
 	// insertion point for declarations
-	IsTitleFormControl = new FormControl(false);
+	ElementTypeList: ElementTypeSelect[] = []
 
 	// the ElementDB of interest
 	element: ElementDB = new ElementDB
@@ -105,6 +106,7 @@ export class ElementDetailComponent implements OnInit {
 		)
 
 		// insertion point for initialisation of enums list
+		this.ElementTypeList = ElementTypeList
 	}
 
 	getElement(): void {
@@ -132,7 +134,6 @@ export class ElementDetailComponent implements OnInit {
 				}
 
 				// insertion point for recovery of form controls value for bool fields
-				this.IsTitleFormControl.setValue(this.element.IsTitle)
 			}
 		)
 
@@ -145,7 +146,6 @@ export class ElementDetailComponent implements OnInit {
 		// pointers fields, after the translation, are nulled in order to perform serialization
 
 		// insertion point for translation/nullation of each field
-		this.element.IsTitle = this.IsTitleFormControl.value
 
 		// save from the front pointer space to the non pointer space for serialization
 
