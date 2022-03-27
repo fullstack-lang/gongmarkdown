@@ -14,9 +14,9 @@ import (
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 
-	"gongmarkdown/go/controllers"
-	"gongmarkdown/go/models"
-	"gongmarkdown/go/orm"
+	"github.com/fullstack-lang/gongmarkdown/go/controllers"
+	"github.com/fullstack-lang/gongmarkdown/go/models"
+	"github.com/fullstack-lang/gongmarkdown/go/orm"
 
 	// gong stack for model analysis
 	gong_controllers "github.com/fullstack-lang/gong/go/controllers"
@@ -30,7 +30,7 @@ import (
 	gongdoc_orm "github.com/fullstack-lang/gongdoc/go/orm"
 	_ "github.com/fullstack-lang/gongdoc/ng"
 
-	gongmarkdown "gongmarkdown"
+	gongmarkdown "github.com/fullstack-lang/gongmarkdown"
 )
 
 var (

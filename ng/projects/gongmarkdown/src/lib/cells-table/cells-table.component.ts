@@ -225,14 +225,14 @@ export class CellsTableComponent implements OnInit {
 
   // display cell in router
   displayCellInRouter(cellID: number) {
-    this.router.navigate(["gongmarkdown_go-" + "cell-display", cellID])
+    this.router.navigate(["github_com_fullstack_lang_gongmarkdown_go-" + "cell-display", cellID])
   }
 
   // set editor outlet
   setEditorRouterOutlet(cellID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_editor: ["gongmarkdown_go-" + "cell-detail", cellID]
+        github_com_fullstack_lang_gongmarkdown_go_editor: ["github_com_fullstack_lang_gongmarkdown_go-" + "cell-detail", cellID]
       }
     }]);
   }
@@ -241,7 +241,7 @@ export class CellsTableComponent implements OnInit {
   setPresentationRouterOutlet(cellID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_presentation: ["gongmarkdown_go-" + "cell-presentation", cellID]
+        github_com_fullstack_lang_gongmarkdown_go_presentation: ["github_com_fullstack_lang_gongmarkdown_go-" + "cell-presentation", cellID]
       }
     }]);
   }

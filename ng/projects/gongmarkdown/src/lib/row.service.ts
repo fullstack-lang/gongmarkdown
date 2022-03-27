@@ -44,7 +44,7 @@ export class RowService {
     origin = origin.replace("4200", "8080")
 
     // compute path to the service
-    this.rowsUrl = origin + '/api/gongmarkdown/go/v1/rows';
+    this.rowsUrl = origin + '/api/github.com/fullstack-lang/gongmarkdown/go/v1/rows';
   }
 
   /** GET rows from the server */

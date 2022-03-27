@@ -1,4 +1,4 @@
-module gongmarkdown
+module github.com/fullstack-lang/gongmarkdown
 
 go 1.17
 

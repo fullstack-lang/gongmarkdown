@@ -19,7 +19,7 @@ func SetupModels(logMode bool, filepath string) *gorm.DB {
 	// adjust naming strategy to the stack
 	gormConfig := &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
-			TablePrefix: "gongmarkdown_go_", // table name prefix
+			TablePrefix: "github_com_fullstack_lang_gongmarkdown_go_", // table name prefix
 		},
 	}
 	db, err := gorm.Open(sqlite.Open(filepath), gormConfig)
@@ -37,7 +37,7 @@ func SetupModels(logMode bool, filepath string) *gorm.DB {
 func AutoMigrate(db *gorm.DB) {
 	// adjust naming strategy to the stack
 	db.Config.NamingStrategy = &schema.NamingStrategy{
-		TablePrefix: "gongmarkdown_go_", // table name prefix
+		TablePrefix: "github_com_fullstack_lang_gongmarkdown_go_", // table name prefix
 	}
 
 	err := db.AutoMigrate( // insertion point for reference to structs
@@ -49,9 +49,9 @@ func AutoMigrate(db *gorm.DB) {
 
 	if err != nil {
 		msg := err.Error()
-		panic("problem with migration " + msg + " on package gongmarkdown/go")
+		panic("problem with migration " + msg + " on package github.com/fullstack-lang/gongmarkdown/go")
 	}
-	// log.Printf("Database Migration of package gongmarkdown/go is OK")
+	// log.Printf("Database Migration of package github.com/fullstack-lang/gongmarkdown/go is OK")
 
 	BackRepo.init(db)
 }

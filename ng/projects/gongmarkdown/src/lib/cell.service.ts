@@ -44,7 +44,7 @@ export class CellService {
     origin = origin.replace("4200", "8080")
 
     // compute path to the service
-    this.cellsUrl = origin + '/api/gongmarkdown/go/v1/cells';
+    this.cellsUrl = origin + '/api/github.com/fullstack-lang/gongmarkdown/go/v1/cells';
   }
 
   /** GET cells from the server */

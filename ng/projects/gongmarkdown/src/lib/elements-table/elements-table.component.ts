@@ -237,14 +237,14 @@ export class ElementsTableComponent implements OnInit {
 
   // display element in router
   displayElementInRouter(elementID: number) {
-    this.router.navigate(["gongmarkdown_go-" + "element-display", elementID])
+    this.router.navigate(["github_com_fullstack_lang_gongmarkdown_go-" + "element-display", elementID])
   }
 
   // set editor outlet
   setEditorRouterOutlet(elementID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_editor: ["gongmarkdown_go-" + "element-detail", elementID]
+        github_com_fullstack_lang_gongmarkdown_go_editor: ["github_com_fullstack_lang_gongmarkdown_go-" + "element-detail", elementID]
       }
     }]);
   }
@@ -253,7 +253,7 @@ export class ElementsTableComponent implements OnInit {
   setPresentationRouterOutlet(elementID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_presentation: ["gongmarkdown_go-" + "element-presentation", elementID]
+        github_com_fullstack_lang_gongmarkdown_go_presentation: ["github_com_fullstack_lang_gongmarkdown_go-" + "element-presentation", elementID]
       }
     }]);
   }

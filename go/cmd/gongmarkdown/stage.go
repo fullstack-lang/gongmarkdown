@@ -3,7 +3,7 @@ package main
 import (
 	"time"
 
-	"gongmarkdown/go/models"
+	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
 
 func init() {

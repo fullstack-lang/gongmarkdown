@@ -76,7 +76,7 @@ export class ElementPresentationComponent implements OnInit {
 	setPresentationRouterOutlet(structName: string, ID: number) {
 		this.router.navigate([{
 			outlets: {
-				gongmarkdown_go_presentation: ["gongmarkdown_go-" + structName + "-presentation", ID]
+				github_com_fullstack_lang_gongmarkdown_go_presentation: ["github_com_fullstack_lang_gongmarkdown_go-" + structName + "-presentation", ID]
 			}
 		}]);
 	}
@@ -85,7 +85,7 @@ export class ElementPresentationComponent implements OnInit {
 	setEditorRouterOutlet(ID: number) {
 		this.router.navigate([{
 			outlets: {
-				gongmarkdown_go_editor: ["gongmarkdown_go-" + "element-detail", ID]
+				github_com_fullstack_lang_gongmarkdown_go_editor: ["github_com_fullstack_lang_gongmarkdown_go-" + "element-detail", ID]
 			}
 		}]);
 	}

@@ -230,14 +230,14 @@ export class MarkdownContentsTableComponent implements OnInit {
 
   // display markdowncontent in router
   displayMarkdownContentInRouter(markdowncontentID: number) {
-    this.router.navigate(["gongmarkdown_go-" + "markdowncontent-display", markdowncontentID])
+    this.router.navigate(["github_com_fullstack_lang_gongmarkdown_go-" + "markdowncontent-display", markdowncontentID])
   }
 
   // set editor outlet
   setEditorRouterOutlet(markdowncontentID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_editor: ["gongmarkdown_go-" + "markdowncontent-detail", markdowncontentID]
+        github_com_fullstack_lang_gongmarkdown_go_editor: ["github_com_fullstack_lang_gongmarkdown_go-" + "markdowncontent-detail", markdowncontentID]
       }
     }]);
   }
@@ -246,7 +246,7 @@ export class MarkdownContentsTableComponent implements OnInit {
   setPresentationRouterOutlet(markdowncontentID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_presentation: ["gongmarkdown_go-" + "markdowncontent-presentation", markdowncontentID]
+        github_com_fullstack_lang_gongmarkdown_go_presentation: ["github_com_fullstack_lang_gongmarkdown_go-" + "markdowncontent-presentation", markdowncontentID]
       }
     }]);
   }

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"gongmarkdown/go/models"
-	"gongmarkdown/go/orm"
+	"github.com/fullstack-lang/gongmarkdown/go/models"
+	"github.com/fullstack-lang/gongmarkdown/go/orm"
 
 	"github.com/gin-gonic/gin"
 )

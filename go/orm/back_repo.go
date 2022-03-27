@@ -11,7 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"gongmarkdown/go/models"
+	"github.com/fullstack-lang/gongmarkdown/go/models"
 
 	"github.com/tealeg/xlsx/v3"
 )

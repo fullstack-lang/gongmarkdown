@@ -225,14 +225,14 @@ export class RowsTableComponent implements OnInit {
 
   // display row in router
   displayRowInRouter(rowID: number) {
-    this.router.navigate(["gongmarkdown_go-" + "row-display", rowID])
+    this.router.navigate(["github_com_fullstack_lang_gongmarkdown_go-" + "row-display", rowID])
   }
 
   // set editor outlet
   setEditorRouterOutlet(rowID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_editor: ["gongmarkdown_go-" + "row-detail", rowID]
+        github_com_fullstack_lang_gongmarkdown_go_editor: ["github_com_fullstack_lang_gongmarkdown_go-" + "row-detail", rowID]
       }
     }]);
   }
@@ -241,7 +241,7 @@ export class RowsTableComponent implements OnInit {
   setPresentationRouterOutlet(rowID: number) {
     this.router.navigate([{
       outlets: {
-        gongmarkdown_go_presentation: ["gongmarkdown_go-" + "row-presentation", rowID]
+        github_com_fullstack_lang_gongmarkdown_go_presentation: ["github_com_fullstack_lang_gongmarkdown_go-" + "row-presentation", rowID]
       }
     }]);
   }

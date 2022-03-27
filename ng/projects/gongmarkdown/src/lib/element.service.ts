@@ -43,7 +43,7 @@ export class ElementService {
     origin = origin.replace("4200", "8080")
 
     // compute path to the service
-    this.elementsUrl = origin + '/api/gongmarkdown/go/v1/elements';
+    this.elementsUrl = origin + '/api/github.com/fullstack-lang/gongmarkdown/go/v1/elements';
   }
 
   /** GET elements from the server */
