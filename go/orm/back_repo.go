@@ -19,9 +19,13 @@ import (
 // BackRepoStruct supports callback functions
 type BackRepoStruct struct {
 	// insertion point for per struct back repo declarations
+	BackRepoCell BackRepoCellStruct
+
 	BackRepoElement BackRepoElementStruct
 
 	BackRepoMarkdownContent BackRepoMarkdownContentStruct
+
+	BackRepoRow BackRepoRowStruct
 
 	CommitFromBackNb uint // this ng is updated at the BackRepo level but also at the BackRepo<GongStruct> level
 
@@ -61,8 +65,10 @@ func (backRepo *BackRepoStruct) IncrementPushFromFrontNb() uint {
 // Init the BackRepoStruct inner variables and link to the database
 func (backRepo *BackRepoStruct) init(db *gorm.DB) {
 	// insertion point for per struct back repo declarations
+	backRepo.BackRepoCell.Init(db)
 	backRepo.BackRepoElement.Init(db)
 	backRepo.BackRepoMarkdownContent.Init(db)
+	backRepo.BackRepoRow.Init(db)
 
 	models.Stage.BackRepo = backRepo
 }
@@ -70,12 +76,16 @@ func (backRepo *BackRepoStruct) init(db *gorm.DB) {
 // Commit the BackRepoStruct inner variables and link to the database
 func (backRepo *BackRepoStruct) Commit(stage *models.StageStruct) {
 	// insertion point for per struct back repo phase one commit
+	backRepo.BackRepoCell.CommitPhaseOne(stage)
 	backRepo.BackRepoElement.CommitPhaseOne(stage)
 	backRepo.BackRepoMarkdownContent.CommitPhaseOne(stage)
+	backRepo.BackRepoRow.CommitPhaseOne(stage)
 
 	// insertion point for per struct back repo phase two commit
+	backRepo.BackRepoCell.CommitPhaseTwo(backRepo)
 	backRepo.BackRepoElement.CommitPhaseTwo(backRepo)
 	backRepo.BackRepoMarkdownContent.CommitPhaseTwo(backRepo)
+	backRepo.BackRepoRow.CommitPhaseTwo(backRepo)
 
 	backRepo.IncrementCommitFromBackNb()
 }
@@ -83,12 +93,16 @@ func (backRepo *BackRepoStruct) Commit(stage *models.StageStruct) {
 // Checkout the database into the stage
 func (backRepo *BackRepoStruct) Checkout(stage *models.StageStruct) {
 	// insertion point for per struct back repo phase one commit
+	backRepo.BackRepoCell.CheckoutPhaseOne()
 	backRepo.BackRepoElement.CheckoutPhaseOne()
 	backRepo.BackRepoMarkdownContent.CheckoutPhaseOne()
+	backRepo.BackRepoRow.CheckoutPhaseOne()
 
 	// insertion point for per struct back repo phase two commit
+	backRepo.BackRepoCell.CheckoutPhaseTwo(backRepo)
 	backRepo.BackRepoElement.CheckoutPhaseTwo(backRepo)
 	backRepo.BackRepoMarkdownContent.CheckoutPhaseTwo(backRepo)
+	backRepo.BackRepoRow.CheckoutPhaseTwo(backRepo)
 }
 
 var BackRepo BackRepoStruct
@@ -106,8 +120,10 @@ func (backRepo *BackRepoStruct) Backup(stage *models.StageStruct, dirPath string
 	os.MkdirAll(dirPath, os.ModePerm)
 
 	// insertion point for per struct backup
+	backRepo.BackRepoCell.Backup(dirPath)
 	backRepo.BackRepoElement.Backup(dirPath)
 	backRepo.BackRepoMarkdownContent.Backup(dirPath)
+	backRepo.BackRepoRow.Backup(dirPath)
 }
 
 // Backup in XL the BackRepoStruct
@@ -118,8 +134,10 @@ func (backRepo *BackRepoStruct) BackupXL(stage *models.StageStruct, dirPath stri
 	file := xlsx.NewFile()
 
 	// insertion point for per struct backup
+	backRepo.BackRepoCell.BackupXL(file)
 	backRepo.BackRepoElement.BackupXL(file)
 	backRepo.BackRepoMarkdownContent.BackupXL(file)
+	backRepo.BackRepoRow.BackupXL(file)
 
 	var b bytes.Buffer
 	writer := bufio.NewWriter(&b)
@@ -144,16 +162,20 @@ func (backRepo *BackRepoStruct) Restore(stage *models.StageStruct, dirPath strin
 	//
 
 	// insertion point for per struct backup
+	backRepo.BackRepoCell.RestorePhaseOne(dirPath)
 	backRepo.BackRepoElement.RestorePhaseOne(dirPath)
 	backRepo.BackRepoMarkdownContent.RestorePhaseOne(dirPath)
+	backRepo.BackRepoRow.RestorePhaseOne(dirPath)
 
 	//
 	// restauration second phase (reindex pointers with the new ID)
 	//
 
 	// insertion point for per struct backup
+	backRepo.BackRepoCell.RestorePhaseTwo()
 	backRepo.BackRepoElement.RestorePhaseTwo()
 	backRepo.BackRepoMarkdownContent.RestorePhaseTwo()
+	backRepo.BackRepoRow.RestorePhaseTwo()
 
 	models.Stage.Checkout()
 }
@@ -180,8 +202,10 @@ func (backRepo *BackRepoStruct) RestoreXL(stage *models.StageStruct, dirPath str
 	//
 
 	// insertion point for per struct backup
+	backRepo.BackRepoCell.RestoreXLPhaseOne(file)
 	backRepo.BackRepoElement.RestoreXLPhaseOne(file)
 	backRepo.BackRepoMarkdownContent.RestoreXLPhaseOne(file)
+	backRepo.BackRepoRow.RestoreXLPhaseOne(file)
 
 	// commit the restored stage
 	models.Stage.Commit()

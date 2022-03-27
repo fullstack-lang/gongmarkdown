@@ -8,6 +8,9 @@ type Element struct {
 	Type ElementType
 
 	SubElements []*Element
+
+	// Rows is set up when element is a Table
+	Rows []*Row
 }
 
 func (element *Element) GetType() ElementType {

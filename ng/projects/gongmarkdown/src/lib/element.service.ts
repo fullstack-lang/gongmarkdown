@@ -71,6 +71,7 @@ export class ElementService {
 
     // insertion point for reset of pointers and reverse pointers (to avoid circular JSON)
     elementdb.SubElements = []
+    elementdb.Rows = []
     let _Element_SubElements_reverse = elementdb.Element_SubElements_reverse
     elementdb.Element_SubElements_reverse = new ElementDB
 
@@ -102,6 +103,7 @@ export class ElementService {
 
     // insertion point for reset of pointers and reverse pointers (to avoid circular JSON)
     elementdb.SubElements = []
+    elementdb.Rows = []
     let _Element_SubElements_reverse = elementdb.Element_SubElements_reverse
     elementdb.Element_SubElements_reverse = new ElementDB
 

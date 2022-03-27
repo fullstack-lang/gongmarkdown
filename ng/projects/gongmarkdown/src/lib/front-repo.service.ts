@@ -4,21 +4,33 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, combineLatest, BehaviorSubject } from 'rxjs';
 
 // insertion point sub template for services imports 
+import { CellDB } from './cell-db'
+import { CellService } from './cell.service'
+
 import { ElementDB } from './element-db'
 import { ElementService } from './element.service'
 
 import { MarkdownContentDB } from './markdowncontent-db'
 import { MarkdownContentService } from './markdowncontent.service'
 
+import { RowDB } from './row-db'
+import { RowService } from './row.service'
+
 
 // FrontRepo stores all instances in a front repository (design pattern repository)
 export class FrontRepo { // insertion point sub template 
+  Cells_array = new Array<CellDB>(); // array of repo instances
+  Cells = new Map<number, CellDB>(); // map of repo instances
+  Cells_batch = new Map<number, CellDB>(); // same but only in last GET (for finding repo instances to delete)
   Elements_array = new Array<ElementDB>(); // array of repo instances
   Elements = new Map<number, ElementDB>(); // map of repo instances
   Elements_batch = new Map<number, ElementDB>(); // same but only in last GET (for finding repo instances to delete)
   MarkdownContents_array = new Array<MarkdownContentDB>(); // array of repo instances
   MarkdownContents = new Map<number, MarkdownContentDB>(); // map of repo instances
   MarkdownContents_batch = new Map<number, MarkdownContentDB>(); // same but only in last GET (for finding repo instances to delete)
+  Rows_array = new Array<RowDB>(); // array of repo instances
+  Rows = new Map<number, RowDB>(); // map of repo instances
+  Rows_batch = new Map<number, RowDB>(); // same but only in last GET (for finding repo instances to delete)
 }
 
 //
@@ -77,8 +89,10 @@ export class FrontRepoService {
 
   constructor(
     private http: HttpClient, // insertion point sub template 
+    private cellService: CellService,
     private elementService: ElementService,
     private markdowncontentService: MarkdownContentService,
+    private rowService: RowService,
   ) { }
 
   // postService provides a post function for each struct name
@@ -109,11 +123,15 @@ export class FrontRepoService {
 
   // typing of observable can be messy in typescript. Therefore, one force the type
   observableFrontRepo: [ // insertion point sub template 
+    Observable<CellDB[]>,
     Observable<ElementDB[]>,
     Observable<MarkdownContentDB[]>,
+    Observable<RowDB[]>,
   ] = [ // insertion point sub template 
+      this.cellService.getCells(),
       this.elementService.getElements(),
       this.markdowncontentService.getMarkdownContents(),
+      this.rowService.getRows(),
     ];
 
   //
@@ -129,19 +147,58 @@ export class FrontRepoService {
           this.observableFrontRepo
         ).subscribe(
           ([ // insertion point sub template for declarations 
+            cells_,
             elements_,
             markdowncontents_,
+            rows_,
           ]) => {
             // Typing can be messy with many items. Therefore, type casting is necessary here
             // insertion point sub template for type casting 
+            var cells: CellDB[]
+            cells = cells_ as CellDB[]
             var elements: ElementDB[]
             elements = elements_ as ElementDB[]
             var markdowncontents: MarkdownContentDB[]
             markdowncontents = markdowncontents_ as MarkdownContentDB[]
+            var rows: RowDB[]
+            rows = rows_ as RowDB[]
 
             // 
             // First Step: init map of instances
             // insertion point sub template for init 
+            // init the array
+            FrontRepoSingloton.Cells_array = cells
+
+            // clear the map that counts Cell in the GET
+            FrontRepoSingloton.Cells_batch.clear()
+
+            cells.forEach(
+              cell => {
+                FrontRepoSingloton.Cells.set(cell.ID, cell)
+                FrontRepoSingloton.Cells_batch.set(cell.ID, cell)
+              }
+            )
+
+            // clear cells that are absent from the batch
+            FrontRepoSingloton.Cells.forEach(
+              cell => {
+                if (FrontRepoSingloton.Cells_batch.get(cell.ID) == undefined) {
+                  FrontRepoSingloton.Cells.delete(cell.ID)
+                }
+              }
+            )
+
+            // sort Cells_array array
+            FrontRepoSingloton.Cells_array.sort((t1, t2) => {
+              if (t1.Name > t2.Name) {
+                return 1;
+              }
+              if (t1.Name < t2.Name) {
+                return -1;
+              }
+              return 0;
+            });
+
             // init the array
             FrontRepoSingloton.Elements_array = elements
 
@@ -208,10 +265,63 @@ export class FrontRepoService {
               return 0;
             });
 
+            // init the array
+            FrontRepoSingloton.Rows_array = rows
+
+            // clear the map that counts Row in the GET
+            FrontRepoSingloton.Rows_batch.clear()
+
+            rows.forEach(
+              row => {
+                FrontRepoSingloton.Rows.set(row.ID, row)
+                FrontRepoSingloton.Rows_batch.set(row.ID, row)
+              }
+            )
+
+            // clear rows that are absent from the batch
+            FrontRepoSingloton.Rows.forEach(
+              row => {
+                if (FrontRepoSingloton.Rows_batch.get(row.ID) == undefined) {
+                  FrontRepoSingloton.Rows.delete(row.ID)
+                }
+              }
+            )
+
+            // sort Rows_array array
+            FrontRepoSingloton.Rows_array.sort((t1, t2) => {
+              if (t1.Name > t2.Name) {
+                return 1;
+              }
+              if (t1.Name < t2.Name) {
+                return -1;
+              }
+              return 0;
+            });
+
 
             // 
             // Second Step: redeem pointers between instances (thanks to maps in the First Step)
             // insertion point sub template for redeem 
+            cells.forEach(
+              cell => {
+                // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
+
+                // insertion point for redeeming ONE-MANY associations
+                // insertion point for slice of pointer field Row.Cells redeeming
+                {
+                  let _row = FrontRepoSingloton.Rows.get(cell.Row_CellsDBID.Int64)
+                  if (_row) {
+                    if (_row.Cells == undefined) {
+                      _row.Cells = new Array<CellDB>()
+                    }
+                    _row.Cells.push(cell)
+                    if (cell.Row_Cells_reverse == undefined) {
+                      cell.Row_Cells_reverse = _row
+                    }
+                  }
+                }
+              }
+            )
             elements.forEach(
               element => {
                 // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
@@ -246,6 +356,26 @@ export class FrontRepoService {
                 // insertion point for redeeming ONE-MANY associations
               }
             )
+            rows.forEach(
+              row => {
+                // insertion point sub sub template for ONE-/ZERO-ONE associations pointers redeeming
+
+                // insertion point for redeeming ONE-MANY associations
+                // insertion point for slice of pointer field Element.Rows redeeming
+                {
+                  let _element = FrontRepoSingloton.Elements.get(row.Element_RowsDBID.Int64)
+                  if (_element) {
+                    if (_element.Rows == undefined) {
+                      _element.Rows = new Array<RowDB>()
+                    }
+                    _element.Rows.push(row)
+                    if (row.Element_Rows_reverse == undefined) {
+                      row.Element_Rows_reverse = _element
+                    }
+                  }
+                }
+              }
+            )
 
             // hand over control flow to observer
             observer.next(FrontRepoSingloton)
@@ -256,6 +386,70 @@ export class FrontRepoService {
   }
 
   // insertion point for pull per struct 
+
+  // CellPull performs a GET on Cell of the stack and redeem association pointers 
+  CellPull(): Observable<FrontRepo> {
+    return new Observable<FrontRepo>(
+      (observer) => {
+        combineLatest([
+          this.cellService.getCells()
+        ]).subscribe(
+          ([ // insertion point sub template 
+            cells,
+          ]) => {
+            // init the array
+            FrontRepoSingloton.Cells_array = cells
+
+            // clear the map that counts Cell in the GET
+            FrontRepoSingloton.Cells_batch.clear()
+
+            // 
+            // First Step: init map of instances
+            // insertion point sub template 
+            cells.forEach(
+              cell => {
+                FrontRepoSingloton.Cells.set(cell.ID, cell)
+                FrontRepoSingloton.Cells_batch.set(cell.ID, cell)
+
+                // insertion point for redeeming ONE/ZERO-ONE associations
+
+                // insertion point for redeeming ONE-MANY associations
+                // insertion point for slice of pointer field Row.Cells redeeming
+                {
+                  let _row = FrontRepoSingloton.Rows.get(cell.Row_CellsDBID.Int64)
+                  if (_row) {
+                    if (_row.Cells == undefined) {
+                      _row.Cells = new Array<CellDB>()
+                    }
+                    _row.Cells.push(cell)
+                    if (cell.Row_Cells_reverse == undefined) {
+                      cell.Row_Cells_reverse = _row
+                    }
+                  }
+                }
+              }
+            )
+
+            // clear cells that are absent from the GET
+            FrontRepoSingloton.Cells.forEach(
+              cell => {
+                if (FrontRepoSingloton.Cells_batch.get(cell.ID) == undefined) {
+                  FrontRepoSingloton.Cells.delete(cell.ID)
+                }
+              }
+            )
+
+            // 
+            // Second Step: redeem pointers between instances (thanks to maps in the First Step)
+            // insertion point sub template 
+
+            // hand over control flow to observer
+            observer.next(FrontRepoSingloton)
+          }
+        )
+      }
+    )
+  }
 
   // ElementPull performs a GET on Element of the stack and redeem association pointers 
   ElementPull(): Observable<FrontRepo> {
@@ -378,12 +572,82 @@ export class FrontRepoService {
       }
     )
   }
+
+  // RowPull performs a GET on Row of the stack and redeem association pointers 
+  RowPull(): Observable<FrontRepo> {
+    return new Observable<FrontRepo>(
+      (observer) => {
+        combineLatest([
+          this.rowService.getRows()
+        ]).subscribe(
+          ([ // insertion point sub template 
+            rows,
+          ]) => {
+            // init the array
+            FrontRepoSingloton.Rows_array = rows
+
+            // clear the map that counts Row in the GET
+            FrontRepoSingloton.Rows_batch.clear()
+
+            // 
+            // First Step: init map of instances
+            // insertion point sub template 
+            rows.forEach(
+              row => {
+                FrontRepoSingloton.Rows.set(row.ID, row)
+                FrontRepoSingloton.Rows_batch.set(row.ID, row)
+
+                // insertion point for redeeming ONE/ZERO-ONE associations
+
+                // insertion point for redeeming ONE-MANY associations
+                // insertion point for slice of pointer field Element.Rows redeeming
+                {
+                  let _element = FrontRepoSingloton.Elements.get(row.Element_RowsDBID.Int64)
+                  if (_element) {
+                    if (_element.Rows == undefined) {
+                      _element.Rows = new Array<RowDB>()
+                    }
+                    _element.Rows.push(row)
+                    if (row.Element_Rows_reverse == undefined) {
+                      row.Element_Rows_reverse = _element
+                    }
+                  }
+                }
+              }
+            )
+
+            // clear rows that are absent from the GET
+            FrontRepoSingloton.Rows.forEach(
+              row => {
+                if (FrontRepoSingloton.Rows_batch.get(row.ID) == undefined) {
+                  FrontRepoSingloton.Rows.delete(row.ID)
+                }
+              }
+            )
+
+            // 
+            // Second Step: redeem pointers between instances (thanks to maps in the First Step)
+            // insertion point sub template 
+
+            // hand over control flow to observer
+            observer.next(FrontRepoSingloton)
+          }
+        )
+      }
+    )
+  }
 }
 
 // insertion point for get unique ID per struct 
-export function getElementUniqueID(id: number): number {
+export function getCellUniqueID(id: number): number {
   return 31 * id
 }
-export function getMarkdownContentUniqueID(id: number): number {
+export function getElementUniqueID(id: number): number {
   return 37 * id
+}
+export function getMarkdownContentUniqueID(id: number): number {
+  return 41 * id
+}
+export function getRowUniqueID(id: number): number {
+  return 43 * id
 }

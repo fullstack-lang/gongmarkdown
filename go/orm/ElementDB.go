@@ -269,6 +269,25 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseTwoInstance(backRepo *B
 			}
 		}
 
+		// This loop encodes the slice of pointers element.Rows into the back repo.
+		// Each back repo instance at the end of the association encode the ID of the association start
+		// into a dedicated field for coding the association. The back repo instance is then saved to the db
+		for idx, rowAssocEnd := range element.Rows {
+
+			// get the back repo instance at the association end
+			rowAssocEnd_DB :=
+				backRepo.BackRepoRow.GetRowDBFromRowPtr(rowAssocEnd)
+
+			// encode reverse pointer in the association end back repo instance
+			rowAssocEnd_DB.Element_RowsDBID.Int64 = int64(elementDB.ID)
+			rowAssocEnd_DB.Element_RowsDBID.Valid = true
+			rowAssocEnd_DB.Element_RowsDBID_Index.Int64 = int64(idx)
+			rowAssocEnd_DB.Element_RowsDBID_Index.Valid = true
+			if q := backRepoElement.db.Save(rowAssocEnd_DB); q.Error != nil {
+				return q.Error
+			}
+		}
+
 		query := backRepoElement.db.Save(&elementDB)
 		if query.Error != nil {
 			return query.Error
@@ -399,6 +418,33 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseTwoInstance(backRepo 
 		elementDB_j := (*backRepo.BackRepoElement.Map_ElementDBID_ElementDB)[elementDB_j_ID]
 
 		return elementDB_i.Element_SubElementsDBID_Index.Int64 < elementDB_j.Element_SubElementsDBID_Index.Int64
+	})
+
+	// This loop redeem element.Rows in the stage from the encode in the back repo
+	// It parses all RowDB in the back repo and if the reverse pointer encoding matches the back repo ID
+	// it appends the stage instance
+	// 1. reset the slice
+	element.Rows = element.Rows[:0]
+	// 2. loop all instances in the type in the association end
+	for _, rowDB_AssocEnd := range *backRepo.BackRepoRow.Map_RowDBID_RowDB {
+		// 3. Does the ID encoding at the end and the ID at the start matches ?
+		if rowDB_AssocEnd.Element_RowsDBID.Int64 == int64(elementDB.ID) {
+			// 4. fetch the associated instance in the stage
+			row_AssocEnd := (*backRepo.BackRepoRow.Map_RowDBID_RowPtr)[rowDB_AssocEnd.ID]
+			// 5. append it the association slice
+			element.Rows = append(element.Rows, row_AssocEnd)
+		}
+	}
+
+	// sort the array according to the order
+	sort.Slice(element.Rows, func(i, j int) bool {
+		rowDB_i_ID := (*backRepo.BackRepoRow.Map_RowPtr_RowDBID)[element.Rows[i]]
+		rowDB_j_ID := (*backRepo.BackRepoRow.Map_RowPtr_RowDBID)[element.Rows[j]]
+
+		rowDB_i := (*backRepo.BackRepoRow.Map_RowDBID_RowDB)[rowDB_i_ID]
+		rowDB_j := (*backRepo.BackRepoRow.Map_RowDBID_RowDB)[rowDB_j_ID]
+
+		return rowDB_i.Element_RowsDBID_Index.Int64 < rowDB_j.Element_RowsDBID_Index.Int64
 	})
 
 	return

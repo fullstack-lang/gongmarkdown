@@ -20,11 +20,17 @@ var __member __void
 // StageStruct enables storage of staged instances
 // swagger:ignore
 type StageStruct struct { // insertion point for definition of arrays registering instances
+	Cells           map[*Cell]struct{}
+	Cells_mapString map[string]*Cell
+
 	Elements           map[*Element]struct{}
 	Elements_mapString map[string]*Element
 
 	MarkdownContents           map[*MarkdownContent]struct{}
 	MarkdownContents_mapString map[string]*MarkdownContent
+
+	Rows           map[*Row]struct{}
+	Rows_mapString map[string]*Row
 
 	AllModelsStructCreateCallback AllModelsStructCreateInterface
 
@@ -53,21 +59,31 @@ type BackRepoInterface interface {
 	BackupXL(stage *StageStruct, dirPath string)
 	RestoreXL(stage *StageStruct, dirPath string)
 	// insertion point for Commit and Checkout signatures
+	CommitCell(cell *Cell)
+	CheckoutCell(cell *Cell)
 	CommitElement(element *Element)
 	CheckoutElement(element *Element)
 	CommitMarkdownContent(markdowncontent *MarkdownContent)
 	CheckoutMarkdownContent(markdowncontent *MarkdownContent)
+	CommitRow(row *Row)
+	CheckoutRow(row *Row)
 	GetLastCommitFromBackNb() uint
 	GetLastPushFromFrontNb() uint
 }
 
 // swagger:ignore instructs the gong compiler (gongc) to avoid this particular struct
 var Stage StageStruct = StageStruct{ // insertion point for array initiatialisation
+	Cells:           make(map[*Cell]struct{}),
+	Cells_mapString: make(map[string]*Cell),
+
 	Elements:           make(map[*Element]struct{}),
 	Elements_mapString: make(map[string]*Element),
 
 	MarkdownContents:           make(map[*MarkdownContent]struct{}),
 	MarkdownContents_mapString: make(map[string]*MarkdownContent),
+
+	Rows:           make(map[*Row]struct{}),
+	Rows_mapString: make(map[string]*Row),
 
 	// end of insertion point
 	Map_GongStructName_InstancesNb: make(map[string]int),
@@ -79,8 +95,10 @@ func (stage *StageStruct) Commit() {
 	}
 
 	// insertion point for computing the map of number of instances per gongstruct
+	stage.Map_GongStructName_InstancesNb["Cell"] = len(stage.Cells)
 	stage.Map_GongStructName_InstancesNb["Element"] = len(stage.Elements)
 	stage.Map_GongStructName_InstancesNb["MarkdownContent"] = len(stage.MarkdownContents)
+	stage.Map_GongStructName_InstancesNb["Row"] = len(stage.Rows)
 
 }
 
@@ -119,6 +137,108 @@ func (stage *StageStruct) RestoreXL(dirPath string) {
 }
 
 // insertion point for cumulative sub template with model space calls
+func (stage *StageStruct) getCellOrderedStructWithNameField() []*Cell {
+	// have alphabetical order generation
+	cellOrdered := []*Cell{}
+	for cell := range stage.Cells {
+		cellOrdered = append(cellOrdered, cell)
+	}
+	sort.Slice(cellOrdered[:], func(i, j int) bool {
+		return cellOrdered[i].Name < cellOrdered[j].Name
+	})
+	return cellOrdered
+}
+
+// Stage puts cell to the model stage
+func (cell *Cell) Stage() *Cell {
+	Stage.Cells[cell] = __member
+	Stage.Cells_mapString[cell.Name] = cell
+
+	return cell
+}
+
+// Unstage removes cell off the model stage
+func (cell *Cell) Unstage() *Cell {
+	delete(Stage.Cells, cell)
+	delete(Stage.Cells_mapString, cell.Name)
+	return cell
+}
+
+// commit cell to the back repo (if it is already staged)
+func (cell *Cell) Commit() *Cell {
+	if _, ok := Stage.Cells[cell]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CommitCell(cell)
+		}
+	}
+	return cell
+}
+
+// Checkout cell to the back repo (if it is already staged)
+func (cell *Cell) Checkout() *Cell {
+	if _, ok := Stage.Cells[cell]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CheckoutCell(cell)
+		}
+	}
+	return cell
+}
+
+//
+// Legacy, to be deleted
+//
+
+// StageCopy appends a copy of cell to the model stage
+func (cell *Cell) StageCopy() *Cell {
+	_cell := new(Cell)
+	*_cell = *cell
+	_cell.Stage()
+	return _cell
+}
+
+// StageAndCommit appends cell to the model stage and commit to the orm repo
+func (cell *Cell) StageAndCommit() *Cell {
+	cell.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMCell(cell)
+	}
+	return cell
+}
+
+// DeleteStageAndCommit appends cell to the model stage and commit to the orm repo
+func (cell *Cell) DeleteStageAndCommit() *Cell {
+	cell.Unstage()
+	DeleteORMCell(cell)
+	return cell
+}
+
+// StageCopyAndCommit appends a copy of cell to the model stage and commit to the orm repo
+func (cell *Cell) StageCopyAndCommit() *Cell {
+	_cell := new(Cell)
+	*_cell = *cell
+	_cell.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMCell(cell)
+	}
+	return _cell
+}
+
+// CreateORMCell enables dynamic staging of a Cell instance
+func CreateORMCell(cell *Cell) {
+	cell.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMCell(cell)
+	}
+}
+
+// DeleteORMCell enables dynamic staging of a Cell instance
+func DeleteORMCell(cell *Cell) {
+	cell.Unstage()
+	if Stage.AllModelsStructDeleteCallback != nil {
+		Stage.AllModelsStructDeleteCallback.DeleteORMCell(cell)
+	}
+}
+
 func (stage *StageStruct) getElementOrderedStructWithNameField() []*Element {
 	// have alphabetical order generation
 	elementOrdered := []*Element{}
@@ -323,32 +443,150 @@ func DeleteORMMarkdownContent(markdowncontent *MarkdownContent) {
 	}
 }
 
+func (stage *StageStruct) getRowOrderedStructWithNameField() []*Row {
+	// have alphabetical order generation
+	rowOrdered := []*Row{}
+	for row := range stage.Rows {
+		rowOrdered = append(rowOrdered, row)
+	}
+	sort.Slice(rowOrdered[:], func(i, j int) bool {
+		return rowOrdered[i].Name < rowOrdered[j].Name
+	})
+	return rowOrdered
+}
+
+// Stage puts row to the model stage
+func (row *Row) Stage() *Row {
+	Stage.Rows[row] = __member
+	Stage.Rows_mapString[row.Name] = row
+
+	return row
+}
+
+// Unstage removes row off the model stage
+func (row *Row) Unstage() *Row {
+	delete(Stage.Rows, row)
+	delete(Stage.Rows_mapString, row.Name)
+	return row
+}
+
+// commit row to the back repo (if it is already staged)
+func (row *Row) Commit() *Row {
+	if _, ok := Stage.Rows[row]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CommitRow(row)
+		}
+	}
+	return row
+}
+
+// Checkout row to the back repo (if it is already staged)
+func (row *Row) Checkout() *Row {
+	if _, ok := Stage.Rows[row]; ok {
+		if Stage.BackRepo != nil {
+			Stage.BackRepo.CheckoutRow(row)
+		}
+	}
+	return row
+}
+
+//
+// Legacy, to be deleted
+//
+
+// StageCopy appends a copy of row to the model stage
+func (row *Row) StageCopy() *Row {
+	_row := new(Row)
+	*_row = *row
+	_row.Stage()
+	return _row
+}
+
+// StageAndCommit appends row to the model stage and commit to the orm repo
+func (row *Row) StageAndCommit() *Row {
+	row.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMRow(row)
+	}
+	return row
+}
+
+// DeleteStageAndCommit appends row to the model stage and commit to the orm repo
+func (row *Row) DeleteStageAndCommit() *Row {
+	row.Unstage()
+	DeleteORMRow(row)
+	return row
+}
+
+// StageCopyAndCommit appends a copy of row to the model stage and commit to the orm repo
+func (row *Row) StageCopyAndCommit() *Row {
+	_row := new(Row)
+	*_row = *row
+	_row.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMRow(row)
+	}
+	return _row
+}
+
+// CreateORMRow enables dynamic staging of a Row instance
+func CreateORMRow(row *Row) {
+	row.Stage()
+	if Stage.AllModelsStructCreateCallback != nil {
+		Stage.AllModelsStructCreateCallback.CreateORMRow(row)
+	}
+}
+
+// DeleteORMRow enables dynamic staging of a Row instance
+func DeleteORMRow(row *Row) {
+	row.Unstage()
+	if Stage.AllModelsStructDeleteCallback != nil {
+		Stage.AllModelsStructDeleteCallback.DeleteORMRow(row)
+	}
+}
+
 // swagger:ignore
 type AllModelsStructCreateInterface interface { // insertion point for Callbacks on creation
+	CreateORMCell(Cell *Cell)
 	CreateORMElement(Element *Element)
 	CreateORMMarkdownContent(MarkdownContent *MarkdownContent)
+	CreateORMRow(Row *Row)
 }
 
 type AllModelsStructDeleteInterface interface { // insertion point for Callbacks on deletion
+	DeleteORMCell(Cell *Cell)
 	DeleteORMElement(Element *Element)
 	DeleteORMMarkdownContent(MarkdownContent *MarkdownContent)
+	DeleteORMRow(Row *Row)
 }
 
 func (stage *StageStruct) Reset() { // insertion point for array reset
+	stage.Cells = make(map[*Cell]struct{})
+	stage.Cells_mapString = make(map[string]*Cell)
+
 	stage.Elements = make(map[*Element]struct{})
 	stage.Elements_mapString = make(map[string]*Element)
 
 	stage.MarkdownContents = make(map[*MarkdownContent]struct{})
 	stage.MarkdownContents_mapString = make(map[string]*MarkdownContent)
 
+	stage.Rows = make(map[*Row]struct{})
+	stage.Rows_mapString = make(map[string]*Row)
+
 }
 
 func (stage *StageStruct) Nil() { // insertion point for array nil
+	stage.Cells = nil
+	stage.Cells_mapString = nil
+
 	stage.Elements = nil
 	stage.Elements_mapString = nil
 
 	stage.MarkdownContents = nil
 	stage.MarkdownContents_mapString = nil
+
+	stage.Rows = nil
+	stage.Rows_mapString = nil
 
 }
 
@@ -426,6 +664,38 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 	setValueField := ""
 
 	// insertion initialization of objects to stage
+	map_Cell_Identifiers := make(map[*Cell]string)
+	_ = map_Cell_Identifiers
+
+	cellOrdered := []*Cell{}
+	for cell := range stage.Cells {
+		cellOrdered = append(cellOrdered, cell)
+	}
+	sort.Slice(cellOrdered[:], func(i, j int) bool {
+		return cellOrdered[i].Name < cellOrdered[j].Name
+	})
+	identifiersDecl += fmt.Sprintf("\n\n	// Declarations of staged instances of Cell")
+	for idx, cell := range cellOrdered {
+
+		id = generatesIdentifier("Cell", idx, cell.Name)
+		map_Cell_Identifiers[cell] = id
+
+		decl = IdentifiersDecls
+		decl = strings.ReplaceAll(decl, "{{Identifier}}", id)
+		decl = strings.ReplaceAll(decl, "{{GeneratedStructName}}", "Cell")
+		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", cell.Name)
+		identifiersDecl += decl
+
+		initializerStatements += fmt.Sprintf("\n\n	// Cell %s values setup", cell.Name)
+		// Initialisation of values
+		setValueField = StringInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Name")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(cell.Name))
+		initializerStatements += setValueField
+
+	}
+
 	map_Element_Identifiers := make(map[*Element]string)
 	_ = map_Element_Identifiers
 
@@ -510,7 +780,49 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 
 	}
 
+	map_Row_Identifiers := make(map[*Row]string)
+	_ = map_Row_Identifiers
+
+	rowOrdered := []*Row{}
+	for row := range stage.Rows {
+		rowOrdered = append(rowOrdered, row)
+	}
+	sort.Slice(rowOrdered[:], func(i, j int) bool {
+		return rowOrdered[i].Name < rowOrdered[j].Name
+	})
+	identifiersDecl += fmt.Sprintf("\n\n	// Declarations of staged instances of Row")
+	for idx, row := range rowOrdered {
+
+		id = generatesIdentifier("Row", idx, row.Name)
+		map_Row_Identifiers[row] = id
+
+		decl = IdentifiersDecls
+		decl = strings.ReplaceAll(decl, "{{Identifier}}", id)
+		decl = strings.ReplaceAll(decl, "{{GeneratedStructName}}", "Row")
+		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", row.Name)
+		identifiersDecl += decl
+
+		initializerStatements += fmt.Sprintf("\n\n	// Row %s values setup", row.Name)
+		// Initialisation of values
+		setValueField = StringInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "Name")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", string(row.Name))
+		initializerStatements += setValueField
+
+	}
+
 	// insertion initialization of objects to stage
+	for idx, cell := range cellOrdered {
+		var setPointerField string
+		_ = setPointerField
+
+		id = generatesIdentifier("Cell", idx, cell.Name)
+		map_Cell_Identifiers[cell] = id
+
+		// Initialisation of values
+	}
+
 	for idx, element := range elementOrdered {
 		var setPointerField string
 		_ = setPointerField
@@ -524,6 +836,14 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 			setPointerField = strings.ReplaceAll(setPointerField, "{{Identifier}}", id)
 			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldName}}", "SubElements")
 			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldNameValue}}", map_Element_Identifiers[_element])
+			pointersInitializesStatements += setPointerField
+		}
+
+		for _, _row := range element.Rows {
+			setPointerField = SliceOfPointersFieldInitStatement
+			setPointerField = strings.ReplaceAll(setPointerField, "{{Identifier}}", id)
+			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldName}}", "Rows")
+			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldNameValue}}", map_Row_Identifiers[_row])
 			pointersInitializesStatements += setPointerField
 		}
 
@@ -542,6 +862,24 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 			setPointerField = strings.ReplaceAll(setPointerField, "{{Identifier}}", id)
 			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldName}}", "Root")
 			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldNameValue}}", map_Element_Identifiers[markdowncontent.Root])
+			pointersInitializesStatements += setPointerField
+		}
+
+	}
+
+	for idx, row := range rowOrdered {
+		var setPointerField string
+		_ = setPointerField
+
+		id = generatesIdentifier("Row", idx, row.Name)
+		map_Row_Identifiers[row] = id
+
+		// Initialisation of values
+		for _, _cell := range row.Cells {
+			setPointerField = SliceOfPointersFieldInitStatement
+			setPointerField = strings.ReplaceAll(setPointerField, "{{Identifier}}", id)
+			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldName}}", "Cells")
+			setPointerField = strings.ReplaceAll(setPointerField, "{{GeneratedFieldNameValue}}", map_Cell_Identifiers[_cell])
 			pointersInitializesStatements += setPointerField
 		}
 

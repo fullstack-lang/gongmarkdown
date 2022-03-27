@@ -38,6 +38,11 @@ import { SplitterComponent } from './splitter/splitter.component'
 import { SidebarComponent } from './sidebar/sidebar.component';
 
 // insertion point for imports 
+import { CellsTableComponent } from './cells-table/cells-table.component'
+import { CellSortingComponent } from './cell-sorting/cell-sorting.component'
+import { CellDetailComponent } from './cell-detail/cell-detail.component'
+import { CellPresentationComponent } from './cell-presentation/cell-presentation.component'
+
 import { ElementsTableComponent } from './elements-table/elements-table.component'
 import { ElementSortingComponent } from './element-sorting/element-sorting.component'
 import { ElementDetailComponent } from './element-detail/element-detail.component'
@@ -48,10 +53,20 @@ import { MarkdownContentSortingComponent } from './markdowncontent-sorting/markd
 import { MarkdownContentDetailComponent } from './markdowncontent-detail/markdowncontent-detail.component'
 import { MarkdownContentPresentationComponent } from './markdowncontent-presentation/markdowncontent-presentation.component'
 
+import { RowsTableComponent } from './rows-table/rows-table.component'
+import { RowSortingComponent } from './row-sorting/row-sorting.component'
+import { RowDetailComponent } from './row-detail/row-detail.component'
+import { RowPresentationComponent } from './row-presentation/row-presentation.component'
+
 
 @NgModule({
 	declarations: [
 		// insertion point for declarations 
+		CellsTableComponent,
+		CellSortingComponent,
+		CellDetailComponent,
+		CellPresentationComponent,
+
 		ElementsTableComponent,
 		ElementSortingComponent,
 		ElementDetailComponent,
@@ -61,6 +76,11 @@ import { MarkdownContentPresentationComponent } from './markdowncontent-presenta
 		MarkdownContentSortingComponent,
 		MarkdownContentDetailComponent,
 		MarkdownContentPresentationComponent,
+
+		RowsTableComponent,
+		RowSortingComponent,
+		RowDetailComponent,
+		RowPresentationComponent,
 
 
 		SplitterComponent,
@@ -101,6 +121,11 @@ import { MarkdownContentPresentationComponent } from './markdowncontent-presenta
 	],
 	exports: [
 		// insertion point for declarations 
+		CellsTableComponent,
+		CellSortingComponent,
+		CellDetailComponent,
+		CellPresentationComponent,
+
 		ElementsTableComponent,
 		ElementSortingComponent,
 		ElementDetailComponent,
@@ -110,6 +135,11 @@ import { MarkdownContentPresentationComponent } from './markdowncontent-presenta
 		MarkdownContentSortingComponent,
 		MarkdownContentDetailComponent,
 		MarkdownContentPresentationComponent,
+
+		RowsTableComponent,
+		RowSortingComponent,
+		RowDetailComponent,
+		RowPresentationComponent,
 
 
 		SplitterComponent,

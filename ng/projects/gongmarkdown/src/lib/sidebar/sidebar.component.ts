@@ -8,10 +8,14 @@ import { FrontRepoService, FrontRepo } from '../front-repo.service'
 import { CommitNbService } from '../commitnb.service'
 
 // insertion point for per struct import code
+import { CellService } from '../cell.service'
+import { getCellUniqueID } from '../front-repo.service'
 import { ElementService } from '../element.service'
 import { getElementUniqueID } from '../front-repo.service'
 import { MarkdownContentService } from '../markdowncontent.service'
 import { getMarkdownContentUniqueID } from '../front-repo.service'
+import { RowService } from '../row.service'
+import { getRowUniqueID } from '../front-repo.service'
 
 /**
  * Types of a GongNode / GongFlatNode
@@ -147,14 +151,24 @@ export class SidebarComponent implements OnInit {
     private commitNbService: CommitNbService,
 
     // insertion point for per struct service declaration
+    private cellService: CellService,
     private elementService: ElementService,
     private markdowncontentService: MarkdownContentService,
+    private rowService: RowService,
   ) { }
 
   ngOnInit(): void {
     this.refresh()
 
     // insertion point for per struct observable for refresh trigger
+    // observable for changes in structs
+    this.cellService.CellServiceChanged.subscribe(
+      message => {
+        if (message == "post" || message == "update" || message == "delete") {
+          this.refresh()
+        }
+      }
+    )
     // observable for changes in structs
     this.elementService.ElementServiceChanged.subscribe(
       message => {
@@ -165,6 +179,14 @@ export class SidebarComponent implements OnInit {
     )
     // observable for changes in structs
     this.markdowncontentService.MarkdownContentServiceChanged.subscribe(
+      message => {
+        if (message == "post" || message == "update" || message == "delete") {
+          this.refresh()
+        }
+      }
+    )
+    // observable for changes in structs
+    this.rowService.RowServiceChanged.subscribe(
       message => {
         if (message == "post" || message == "update" || message == "delete") {
           this.refresh()
@@ -195,6 +217,50 @@ export class SidebarComponent implements OnInit {
       this.gongNodeTree = new Array<GongNode>();
       
       // insertion point for per struct tree construction
+      /**
+      * fill up the Cell part of the mat tree
+      */
+      let cellGongNodeStruct: GongNode = {
+        name: "Cell",
+        type: GongNodeType.STRUCT,
+        id: 0,
+        uniqueIdPerStack: 13 * nonInstanceNodeId,
+        structName: "Cell",
+        associationField: "",
+        associatedStructName: "",
+        children: new Array<GongNode>()
+      }
+      nonInstanceNodeId = nonInstanceNodeId + 1
+      this.gongNodeTree.push(cellGongNodeStruct)
+
+      this.frontRepo.Cells_array.sort((t1, t2) => {
+        if (t1.Name > t2.Name) {
+          return 1;
+        }
+        if (t1.Name < t2.Name) {
+          return -1;
+        }
+        return 0;
+      });
+
+      this.frontRepo.Cells_array.forEach(
+        cellDB => {
+          let cellGongNodeInstance: GongNode = {
+            name: cellDB.Name,
+            type: GongNodeType.INSTANCE,
+            id: cellDB.ID,
+            uniqueIdPerStack: getCellUniqueID(cellDB.ID),
+            structName: "Cell",
+            associationField: "",
+            associatedStructName: "",
+            children: new Array<GongNode>()
+          }
+          cellGongNodeStruct.children!.push(cellGongNodeInstance)
+
+          // insertion point for per field code
+        }
+      )
+
       /**
       * fill up the Element part of the mat tree
       */
@@ -266,6 +332,38 @@ export class SidebarComponent implements OnInit {
               children: new Array<GongNode>()
             }
             SubElementsGongNodeAssociation.children.push(elementNode)
+          })
+
+          /**
+          * let append a node for the slide of pointer Rows
+          */
+          let RowsGongNodeAssociation: GongNode = {
+            name: "(Row) Rows",
+            type: GongNodeType.ONE__ZERO_MANY_ASSOCIATION,
+            id: elementDB.ID,
+            uniqueIdPerStack: 19 * nonInstanceNodeId,
+            structName: "Element",
+            associationField: "Rows",
+            associatedStructName: "Row",
+            children: new Array<GongNode>()
+          }
+          nonInstanceNodeId = nonInstanceNodeId + 1
+          elementGongNodeInstance.children.push(RowsGongNodeAssociation)
+
+          elementDB.Rows?.forEach(rowDB => {
+            let rowNode: GongNode = {
+              name: rowDB.Name,
+              type: GongNodeType.INSTANCE,
+              id: rowDB.ID,
+              uniqueIdPerStack: // godel numbering (thank you kurt)
+                7 * getElementUniqueID(elementDB.ID)
+                + 11 * getRowUniqueID(rowDB.ID),
+              structName: "Row",
+              associationField: "",
+              associatedStructName: "",
+              children: new Array<GongNode>()
+            }
+            RowsGongNodeAssociation.children.push(rowNode)
           })
 
         }
@@ -346,6 +444,82 @@ export class SidebarComponent implements OnInit {
             }
             RootGongNodeAssociation.children.push(markdowncontentGongNodeInstance_Root)
           }
+
+        }
+      )
+
+      /**
+      * fill up the Row part of the mat tree
+      */
+      let rowGongNodeStruct: GongNode = {
+        name: "Row",
+        type: GongNodeType.STRUCT,
+        id: 0,
+        uniqueIdPerStack: 13 * nonInstanceNodeId,
+        structName: "Row",
+        associationField: "",
+        associatedStructName: "",
+        children: new Array<GongNode>()
+      }
+      nonInstanceNodeId = nonInstanceNodeId + 1
+      this.gongNodeTree.push(rowGongNodeStruct)
+
+      this.frontRepo.Rows_array.sort((t1, t2) => {
+        if (t1.Name > t2.Name) {
+          return 1;
+        }
+        if (t1.Name < t2.Name) {
+          return -1;
+        }
+        return 0;
+      });
+
+      this.frontRepo.Rows_array.forEach(
+        rowDB => {
+          let rowGongNodeInstance: GongNode = {
+            name: rowDB.Name,
+            type: GongNodeType.INSTANCE,
+            id: rowDB.ID,
+            uniqueIdPerStack: getRowUniqueID(rowDB.ID),
+            structName: "Row",
+            associationField: "",
+            associatedStructName: "",
+            children: new Array<GongNode>()
+          }
+          rowGongNodeStruct.children!.push(rowGongNodeInstance)
+
+          // insertion point for per field code
+          /**
+          * let append a node for the slide of pointer Cells
+          */
+          let CellsGongNodeAssociation: GongNode = {
+            name: "(Cell) Cells",
+            type: GongNodeType.ONE__ZERO_MANY_ASSOCIATION,
+            id: rowDB.ID,
+            uniqueIdPerStack: 19 * nonInstanceNodeId,
+            structName: "Row",
+            associationField: "Cells",
+            associatedStructName: "Cell",
+            children: new Array<GongNode>()
+          }
+          nonInstanceNodeId = nonInstanceNodeId + 1
+          rowGongNodeInstance.children.push(CellsGongNodeAssociation)
+
+          rowDB.Cells?.forEach(cellDB => {
+            let cellNode: GongNode = {
+              name: cellDB.Name,
+              type: GongNodeType.INSTANCE,
+              id: cellDB.ID,
+              uniqueIdPerStack: // godel numbering (thank you kurt)
+                7 * getRowUniqueID(rowDB.ID)
+                + 11 * getCellUniqueID(cellDB.ID),
+              structName: "Cell",
+              associationField: "",
+              associatedStructName: "",
+              children: new Array<GongNode>()
+            }
+            CellsGongNodeAssociation.children.push(cellNode)
+          })
 
         }
       )

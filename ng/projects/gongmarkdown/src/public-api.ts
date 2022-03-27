@@ -14,6 +14,13 @@ export * from './lib/commitnb.service'
 export * from './lib/push_from_front_nb.service'
 
 
+export * from './lib/cell-detail/cell-detail.component'
+export * from './lib/cell-presentation/cell-presentation.component'
+export * from './lib/cell-sorting/cell-sorting.component'
+export * from './lib/cells-table/cells-table.component'
+export * from './lib/cell-db'
+export * from './lib/cell.service'
+
 export * from './lib/element-detail/element-detail.component'
 export * from './lib/element-presentation/element-presentation.component'
 export * from './lib/element-sorting/element-sorting.component'
@@ -27,6 +34,13 @@ export * from './lib/markdowncontent-sorting/markdowncontent-sorting.component'
 export * from './lib/markdowncontents-table/markdowncontents-table.component'
 export * from './lib/markdowncontent-db'
 export * from './lib/markdowncontent.service'
+
+export * from './lib/row-detail/row-detail.component'
+export * from './lib/row-presentation/row-presentation.component'
+export * from './lib/row-sorting/row-sorting.component'
+export * from './lib/rows-table/rows-table.component'
+export * from './lib/row-db'
+export * from './lib/row.service'
 
 
 export * from './lib/ElementType'

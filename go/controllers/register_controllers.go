@@ -43,6 +43,13 @@ type ValidationError struct {
 func RegisterControllers(r *gin.Engine) {
 	v1 := r.Group("/api/gongmarkdown/go")
 	{ // insertion point for registrations
+		v1.GET("/v1/cells", GetCells)
+		v1.GET("/v1/cells/:id", GetCell)
+		v1.POST("/v1/cells", PostCell)
+		v1.PATCH("/v1/cells/:id", UpdateCell)
+		v1.PUT("/v1/cells/:id", UpdateCell)
+		v1.DELETE("/v1/cells/:id", DeleteCell)
+
 		v1.GET("/v1/elements", GetElements)
 		v1.GET("/v1/elements/:id", GetElement)
 		v1.POST("/v1/elements", PostElement)
@@ -56,6 +63,13 @@ func RegisterControllers(r *gin.Engine) {
 		v1.PATCH("/v1/markdowncontents/:id", UpdateMarkdownContent)
 		v1.PUT("/v1/markdowncontents/:id", UpdateMarkdownContent)
 		v1.DELETE("/v1/markdowncontents/:id", DeleteMarkdownContent)
+
+		v1.GET("/v1/rows", GetRows)
+		v1.GET("/v1/rows/:id", GetRow)
+		v1.POST("/v1/rows", PostRow)
+		v1.PATCH("/v1/rows/:id", UpdateRow)
+		v1.PUT("/v1/rows/:id", UpdateRow)
+		v1.DELETE("/v1/rows/:id", DeleteRow)
 
 		v1.GET("/commitfrombacknb", GetLastCommitFromBackNb)
 		v1.GET("/pushfromfrontnb", GetLastPushFromFrontNb)
