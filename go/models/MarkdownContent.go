@@ -28,6 +28,34 @@ func (markdownContent *MarkdownContent) RecursiveUpdateContent(element *Element,
 			markdownContent.Content = markdownContent.Content + "#"
 		}
 		markdownContent.Content = markdownContent.Content + " "
+	case TABLE:
+		if len(element.Rows) == 0 {
+			break
+		}
+
+		// create title row
+		markdownContent.Content = markdownContent.Content + "|"
+		for _, cell := range element.Rows[0].Cells {
+			markdownContent.Content = markdownContent.Content + cell.Name + "|"
+		}
+		markdownContent.Content = markdownContent.Content + "\n"
+
+		// creates line under title row
+		markdownContent.Content = markdownContent.Content + "|"
+		for idx := 0; idx < len(element.Rows[0].Cells); idx++ {
+			markdownContent.Content = markdownContent.Content + "-" + "|"
+		}
+		markdownContent.Content = markdownContent.Content + "\n"
+
+		// create one line per remaining row
+		for rowId := 1; rowId < len(element.Rows); rowId++ {
+			for _, cell := range element.Rows[rowId].Cells {
+				markdownContent.Content = markdownContent.Content + cell.Name + "|"
+			}
+			markdownContent.Content = markdownContent.Content + "\n"
+		}
+		markdownContent.Content = markdownContent.Content + "\n"
+
 	}
 
 	markdownContent.Content = markdownContent.Content + element.GetContent()
