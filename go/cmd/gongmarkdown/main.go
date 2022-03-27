@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/static"
@@ -42,6 +43,8 @@ var (
 	marshallOnCommit  = flag.String("marshallOnCommit", "", "on all commits, marshall staged data to a go file with the marshall name and '.go' (must be lowercased without spaces). If marshall arg is '', no marshalling")
 
 	diagrams = flag.Bool("diagrams", true, "parse/analysis go/models and go/diagrams (takes a few seconds)")
+
+	generateDocument = flag.Bool("generateDocument", false, "generates a markdown document")
 )
 
 // InjectionGateway is the singloton that stores all functions
@@ -161,6 +164,42 @@ func main() {
 	gongdoc_controllers.RegisterControllers(r)
 	gong_controllers.RegisterControllers(r)
 	gongdoc_models.Stage.Commit()
+
+	if *generateDocument {
+		markdownContent := (&models.MarkdownContent{Name: "Dummy"}).Stage()
+		markdownContent.Name = "Dummy"
+
+		root := (&models.Element{Name: "Root"}).Stage()
+		root.Type = models.PARAGRAPH
+		markdownContent.Root = root
+
+		// table := (&models.Element{Name: "Table"}).Stage()
+		// table.Content = "Synthetic table"
+		// table.Type = models.TABLE
+
+		dummyData1 := (&models.DummyData{}).Stage()
+		dummyData1.Name = "dummyData1"
+		dummyData1.DummyString = "dummyData1 string"
+		dummyData1.DummyBool = true
+		dummyData1.DummyDuration = time.Hour + time.Minute
+		dummyData1.DummyInt = 42
+		dummyData1.DummyFloat = 1.62
+
+		dummyData2 := (&models.DummyData{}).Stage()
+		dummyData2.Name = "dummyData2"
+		dummyData2.DummyString = "dummyData2 string"
+		dummyData2.DummyBool = true
+		dummyData2.DummyDuration = 3*time.Hour + 34*time.Minute
+		dummyData2.DummyInt = 43
+		dummyData2.DummyFloat = 5.77
+
+		another := (&models.AnotherDummyData{Name: "another"}).Stage()
+		dummyData1.DummyPointerToGongStruct = another
+
+		table := models.GenerateTableOfDummnies()
+		root.SubElements = append(root.SubElements, table)
+
+	}
 
 	// fetch the document singloton
 	var singloton *models.MarkdownContent
