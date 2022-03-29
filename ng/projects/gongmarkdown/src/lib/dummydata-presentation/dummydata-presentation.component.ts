@@ -9,6 +9,7 @@ import { FrontRepoService, FrontRepo } from '../front-repo.service'
 import { Router, RouterState, ActivatedRoute } from '@angular/router';
 
 // insertion point for additional imports
+import { DummnyTypeIntList } from '../DummnyTypeInt'
 
 export interface dummydataDummyElement {
 }
@@ -29,6 +30,7 @@ export class DummyDataPresentationComponent implements OnInit {
 	DummyDuration_Minutes: number = 0
 	DummyDuration_Seconds: number = 0
 	// insertion point for additionnal enum int field declarations
+	DummyEnumInt_Value : string = ""
 
 	displayedColumns: string[] = []
 	dataSource = ELEMENT_DATA
@@ -76,6 +78,7 @@ export class DummyDataPresentationComponent implements OnInit {
 				this.DummyDuration_Minutes = Math.floor(this.dummydata.DummyDuration % (3600 * 1000 * 1000 * 1000) / (60 * 1000 * 1000 * 1000))
 				this.DummyDuration_Seconds = this.dummydata.DummyDuration % (60 * 1000 * 1000 * 1000) / (1000 * 1000 * 1000)
 				// insertion point for recovery of enum tint
+				this.DummyEnumInt_Value = DummnyTypeIntList[this.dummydata.DummyEnumInt].viewValue
 			}
 		);
 	}

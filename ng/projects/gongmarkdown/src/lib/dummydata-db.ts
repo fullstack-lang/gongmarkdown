@@ -15,10 +15,13 @@ export class DummyDataDB {
 	DummyInt: number = 0
 	DummyFloat: number = 0
 	DummyBool: boolean = false
+	DummyEnumString: string = ""
+	DummyEnumInt: number = 0
 	DummyTime: Date = new Date
 	DummyDuration: number = 0
 
 	// insertion point for other declarations
+	DummyEnumInt_string?: string
 	DummyDuration_string?: string
 	DummyPointerToGongStruct?: AnotherDummyDataDB
 	DummyPointerToGongStructID: NullInt64 = new NullInt64 // if pointer is null, DummyPointerToGongStruct.ID = 0

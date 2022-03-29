@@ -57,4 +57,5 @@ export * from './lib/row-db'
 export * from './lib/row.service'
 
 
+export * from './lib/DummnyTypeInt'
 export * from './lib/ElementType'

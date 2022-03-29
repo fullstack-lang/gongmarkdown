@@ -181,6 +181,8 @@ func main() {
 		dummyData1.Name = "dummyData1"
 		dummyData1.DummyString = "dummyData1 string"
 		dummyData1.DummyBool = true
+		dummyData1.DummyEnumInt = models.ONE
+		dummyData1.DummyEnumString = models.PARAGRAPH
 		dummyData1.DummyDuration = time.Hour + time.Minute
 		dummyData1.DummyInt = 42
 		dummyData1.DummyFloat = 1.62

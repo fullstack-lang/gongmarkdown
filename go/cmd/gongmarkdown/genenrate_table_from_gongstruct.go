@@ -29,7 +29,8 @@ func GenerateTableFromDummyDatas(gongStructInstances []models.GetFieldsInterface
 		element.Rows = append(element.Rows, row)
 
 		for _, field := range fields {
-			row.Cells = append(row.Cells, (&gongmarkdown_models.Cell{Name: gongStructInstance.GetFieldStringValue(field)}).Stage())
+			cell := (&gongmarkdown_models.Cell{Name: gongStructInstance.GetFieldStringValue(field)}).Stage()
+			row.Cells = append(row.Cells, cell)
 		}
 	}
 

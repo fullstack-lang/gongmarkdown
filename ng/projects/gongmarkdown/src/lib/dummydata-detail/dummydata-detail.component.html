@@ -57,6 +57,26 @@
     <mat-checkbox [formControl]="DummyBoolFormControl">DummyBool</mat-checkbox>
 
     <!-- -->
+    <mat-form-field appearance="fill" class="detail-full-width">
+        <mat-label>DummyEnumString</mat-label>
+        <mat-select [(ngModel)]="dummydata.DummyEnumString" [ngModelOptions]="{standalone: true}">
+            <mat-option *ngFor="let enum of ElementTypeList" [value]="enum.value">
+                {{enum.viewValue}}
+            </mat-option>
+        </mat-select>
+    </mat-form-field>
+
+    <!-- -->
+    <mat-form-field appearance="fill" class="detail-full-width">
+        <mat-label>DummyEnumInt</mat-label>
+        <mat-select [(ngModel)]="dummydata.DummyEnumInt" [ngModelOptions]="{standalone: true}">
+            <mat-option *ngFor="let enum of DummnyTypeIntList" [value]="enum.value">
+                {{enum.viewValue}}
+            </mat-option>
+        </mat-select>
+    </mat-form-field>
+
+    <!-- -->
     <mat-form-field>
         <mat-label>DummyTime</mat-label>
         <input matInput [ngModelOptions]="{standalone: true}" [ngxMatDatetimePicker]="pickerDummyTime" [(ngModel)]="dummydata.DummyTime">

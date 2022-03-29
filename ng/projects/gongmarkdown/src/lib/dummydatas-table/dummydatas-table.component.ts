@@ -18,6 +18,7 @@ import { DummyDataDB } from '../dummydata-db'
 import { DummyDataService } from '../dummydata.service'
 
 // insertion point for additional imports
+import { DummnyTypeIntList } from '../DummnyTypeInt'
 
 // TableComponent is initilizaed from different routes
 // TableComponentMode detail different cases 
@@ -83,6 +84,12 @@ export class DummyDatasTableComponent implements OnInit {
         case 'DummyBool':
           return dummydataDB.DummyBool?"true":"false";
 
+        case 'DummyEnumString':
+          return dummydataDB.DummyEnumString;
+
+        case 'DummyEnumInt':
+          return dummydataDB.DummyEnumInt_string!;
+
         case 'DummyTime':
           return dummydataDB.DummyTime.getDate();
 
@@ -110,6 +117,8 @@ export class DummyDatasTableComponent implements OnInit {
       mergedContent += dummydataDB.DummyString.toLowerCase()
       mergedContent += dummydataDB.DummyInt.toString()
       mergedContent += dummydataDB.DummyFloat.toString()
+      mergedContent += dummydataDB.DummyEnumString.toLowerCase()
+      mergedContent += dummydataDB.DummyEnumInt_string!
       if (dummydataDB.DummyPointerToGongStruct) {
         mergedContent += dummydataDB.DummyPointerToGongStruct.Name.toLowerCase()
       }
@@ -168,6 +177,8 @@ export class DummyDatasTableComponent implements OnInit {
         "DummyInt",
         "DummyFloat",
         "DummyBool",
+        "DummyEnumString",
+        "DummyEnumInt",
         "DummyTime",
         "DummyDuration",
         "DummyPointerToGongStruct",
@@ -179,6 +190,8 @@ export class DummyDatasTableComponent implements OnInit {
         "DummyInt",
         "DummyFloat",
         "DummyBool",
+        "DummyEnumString",
+        "DummyEnumInt",
         "DummyTime",
         "DummyDuration",
         "DummyPointerToGongStruct",
@@ -209,6 +222,9 @@ export class DummyDatasTableComponent implements OnInit {
             dummydata.DummyDuration % (60 * 1000 * 1000 * 1000) / (1000 * 1000 * 1000) + "S"
         }
         // insertion point for enum int Recoveries
+        for (let dummydata of this.dummydatas) {
+          dummydata.DummyEnumInt_string = DummnyTypeIntList[dummydata.DummyEnumInt].viewValue
+        }
         
         // in case the component is called as a selection component
         if (this.mode == TableComponentMode.ONE_MANY_ASSOCIATION_MODE) {

@@ -17,6 +17,13 @@ type __void struct{}
 // needed for creating set of instances in the stage
 var __member __void
 
+// GetFieldsInterface is the interface met by GongStructs
+// It allows runtime reflexion of instances (without the hassle of the "reflect" package)
+type GetFieldsInterface interface {
+	GetFields() (res []string)
+	GetFieldStringValue(fieldName string) (res string)
+}
+
 // StageStruct enables storage of staged instances
 // swagger:ignore
 type StageStruct struct { // insertion point for definition of arrays registering instances
@@ -257,6 +264,22 @@ func DeleteORMAnotherDummyData(anotherdummydata *AnotherDummyData) {
 	}
 }
 
+// for satisfaction of GetFields interface
+func (anotherdummydata *AnotherDummyData) GetFields() (res []string) {
+	// list of fields 
+	res = []string{"Name",  }
+	return
+}
+
+func (anotherdummydata *AnotherDummyData) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	// string value of fields
+	case "Name":
+		res = anotherdummydata.Name
+	}
+	return
+}
+
 func (stage *StageStruct) getCellOrderedStructWithNameField() []*Cell {
 	// have alphabetical order generation
 	cellOrdered := []*Cell{}
@@ -357,6 +380,22 @@ func DeleteORMCell(cell *Cell) {
 	if Stage.AllModelsStructDeleteCallback != nil {
 		Stage.AllModelsStructDeleteCallback.DeleteORMCell(cell)
 	}
+}
+
+// for satisfaction of GetFields interface
+func (cell *Cell) GetFields() (res []string) {
+	// list of fields 
+	res = []string{"Name",  }
+	return
+}
+
+func (cell *Cell) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	// string value of fields
+	case "Name":
+		res = cell.Name
+	}
+	return
 }
 
 func (stage *StageStruct) getDummyDataOrderedStructWithNameField() []*DummyData {
@@ -461,6 +500,42 @@ func DeleteORMDummyData(dummydata *DummyData) {
 	}
 }
 
+// for satisfaction of GetFields interface
+func (dummydata *DummyData) GetFields() (res []string) {
+	// list of fields 
+	res = []string{"Name", "DummyString", "DummyInt", "DummyFloat", "DummyBool", "DummyEnumString", "DummyEnumInt", "DummyTime", "DummyDuration", "DummyPointerToGongStruct",  }
+	return
+}
+
+func (dummydata *DummyData) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	// string value of fields
+	case "Name":
+		res = dummydata.Name
+	case "DummyString":
+		res = dummydata.DummyString
+	case "DummyInt":
+		res = fmt.Sprintf("%d", dummydata.DummyInt)
+	case "DummyFloat":
+		res = fmt.Sprintf("%f", dummydata.DummyFloat)
+	case "DummyBool":
+		res = fmt.Sprintf("%t", dummydata.DummyBool)
+	case "DummyEnumString":
+		res = dummydata.DummyEnumString.ToCodeString()
+	case "DummyEnumInt":
+		res = dummydata.DummyEnumInt.ToCodeString()
+	case "DummyTime":
+		res = dummydata.DummyTime.String()
+	case "DummyDuration":
+		res = fmt.Sprintf("%d", dummydata.DummyDuration)
+	case "DummyPointerToGongStruct":
+		if dummydata.DummyPointerToGongStruct != nil {
+			res = dummydata.DummyPointerToGongStruct.Name
+		}
+	}
+	return
+}
+
 func (stage *StageStruct) getElementOrderedStructWithNameField() []*Element {
 	// have alphabetical order generation
 	elementOrdered := []*Element{}
@@ -561,6 +636,26 @@ func DeleteORMElement(element *Element) {
 	if Stage.AllModelsStructDeleteCallback != nil {
 		Stage.AllModelsStructDeleteCallback.DeleteORMElement(element)
 	}
+}
+
+// for satisfaction of GetFields interface
+func (element *Element) GetFields() (res []string) {
+	// list of fields 
+	res = []string{"Name", "Content", "Type", "SubElements", "Rows",  }
+	return
+}
+
+func (element *Element) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	// string value of fields
+	case "Name":
+		res = element.Name
+	case "Content":
+		res = element.Content
+	case "Type":
+		res = element.Type.ToCodeString()
+	}
+	return
 }
 
 func (stage *StageStruct) getMarkdownContentOrderedStructWithNameField() []*MarkdownContent {
@@ -665,6 +760,28 @@ func DeleteORMMarkdownContent(markdowncontent *MarkdownContent) {
 	}
 }
 
+// for satisfaction of GetFields interface
+func (markdowncontent *MarkdownContent) GetFields() (res []string) {
+	// list of fields 
+	res = []string{"Name", "Content", "Root",  }
+	return
+}
+
+func (markdowncontent *MarkdownContent) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	// string value of fields
+	case "Name":
+		res = markdowncontent.Name
+	case "Content":
+		res = markdowncontent.Content
+	case "Root":
+		if markdowncontent.Root != nil {
+			res = markdowncontent.Root.Name
+		}
+	}
+	return
+}
+
 func (stage *StageStruct) getRowOrderedStructWithNameField() []*Row {
 	// have alphabetical order generation
 	rowOrdered := []*Row{}
@@ -765,6 +882,22 @@ func DeleteORMRow(row *Row) {
 	if Stage.AllModelsStructDeleteCallback != nil {
 		Stage.AllModelsStructDeleteCallback.DeleteORMRow(row)
 	}
+}
+
+// for satisfaction of GetFields interface
+func (row *Row) GetFields() (res []string) {
+	// list of fields 
+	res = []string{"Name", "Cells",  }
+	return
+}
+
+func (row *Row) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	// string value of fields
+	case "Name":
+		res = row.Name
+	}
+	return
 }
 
 // swagger:ignore
@@ -1018,6 +1151,20 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
 		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "DummyBool")
 		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", fmt.Sprintf("%t", dummydata.DummyBool))
+		initializerStatements += setValueField
+
+		if dummydata.DummyEnumString != "" {
+			setValueField = StringEnumInitStatement
+			setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+			setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "DummyEnumString")
+			setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", "models."+dummydata.DummyEnumString.ToCodeString())
+			initializerStatements += setValueField
+		}
+
+		setValueField = NumberInitStatement
+		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldName}}", "DummyEnumInt")
+		setValueField = strings.ReplaceAll(setValueField, "{{GeneratedFieldNameValue}}", "models."+dummydata.DummyEnumInt.ToCodeString())
 		initializerStatements += setValueField
 
 		setValueField = TimeInitStatement
@@ -1275,6 +1422,45 @@ func generatesIdentifier(gongStructName string, idx int, instanceName string) (i
 }
 
 // insertion point of enum utility functions
+// Utility function for DummnyTypeInt
+// if enum values are string, it is stored with the value
+// if enum values are int, they are stored with the code of the value
+func (dummnytypeint DummnyTypeInt) ToInt() (res int) {
+
+	// migration of former implementation of enum
+	switch dummnytypeint {
+	// insertion code per enum code
+	case ONE:
+		res = 1
+	case TWO:
+		res = 2
+	}
+	return
+}
+
+func (dummnytypeint *DummnyTypeInt) FromInt(input int) {
+
+	switch input {
+	// insertion code per enum code
+	case 1:
+		*dummnytypeint = ONE
+	case 2:
+		*dummnytypeint = TWO
+	}
+}
+
+func (dummnytypeint *DummnyTypeInt) ToCodeString() (res string) {
+
+	switch *dummnytypeint {
+	// insertion code per enum code
+	case ONE:
+		res = "ONE"
+	case TWO:
+		res = "TWO"
+	}
+	return
+}
+
 // Utility function for ElementType
 // if enum values are string, it is stored with the value
 // if enum values are int, they are stored with the code of the value
@@ -1320,29 +1506,3 @@ func (elementtype *ElementType) ToCodeString() (res string) {
 	return
 }
 
-func (dummyData *DummyData) GetFields() (res []string) {
-	res = []string{"Name", "DummyString", "DummyInt", "DummyFloat", "DummyBool"}
-
-	return
-}
-
-func (dummyData *DummyData) GetFieldStringValue(fieldName string) (res string) {
-	switch fieldName {
-	case "Name":
-		res = dummyData.Name
-	case "DummyString":
-		res = dummyData.DummyString
-	case "DummyInt":
-		res = fmt.Sprintf("%d", dummyData.DummyInt)
-	case "DummyFloat":
-		res = fmt.Sprintf("%f", dummyData.DummyFloat)
-	case "DummyBool":
-		res = fmt.Sprintf("%t", dummyData.DummyBool)
-	}
-	return
-}
-
-type GetFieldsInterface interface {
-	GetFieldStringValue(fieldName string) (res string)
-	GetFields() (res []string)
-}

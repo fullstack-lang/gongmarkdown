@@ -54,6 +54,20 @@
             </td>
         </ng-container>
         <!-- -->
+        <ng-container matColumnDef="DummyEnumString">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> DummyEnumString </th>
+            <td mat-cell *matCellDef="let DummyData">
+                {{DummyData.DummyEnumString}}
+            </td>
+        </ng-container>
+        <!-- -->
+        <ng-container matColumnDef="DummyEnumInt">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header> DummyEnumInt </th>
+            <td mat-cell *matCellDef="let DummyData">
+                {{DummyData.DummyEnumInt_string}}
+            </td>
+        </ng-container>
+        <!-- -->
         <ng-container matColumnDef="DummyTime">
             <th mat-header-cell *matHeaderCellDef mat-sort-header> DummyTime </th>
             <td mat-cell *matCellDef="let DummyData">

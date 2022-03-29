@@ -10,6 +10,8 @@ import { MapOfComponents } from '../map-components'
 import { MapOfSortingComponents } from '../map-components'
 
 // insertion point for imports
+import { ElementTypeSelect, ElementTypeList } from '../ElementType'
+import { DummnyTypeIntSelect, DummnyTypeIntList } from '../DummnyTypeInt'
 
 import { Router, RouterState, ActivatedRoute } from '@angular/router';
 
@@ -34,6 +36,8 @@ export class DummyDataDetailComponent implements OnInit {
 
 	// insertion point for declarations
 	DummyBoolFormControl = new FormControl(false);
+	ElementTypeList: ElementTypeSelect[] = []
+	DummnyTypeIntList: DummnyTypeIntSelect[] = []
 	DummyDuration_Hours: number = 0
 	DummyDuration_Minutes: number = 0
 	DummyDuration_Seconds: number = 0
@@ -103,6 +107,8 @@ export class DummyDataDetailComponent implements OnInit {
 		)
 
 		// insertion point for initialisation of enums list
+		this.ElementTypeList = ElementTypeList
+		this.DummnyTypeIntList = DummnyTypeIntList
 	}
 
 	getDummyData(): void {

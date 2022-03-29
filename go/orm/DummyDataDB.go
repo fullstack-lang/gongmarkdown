@@ -78,6 +78,12 @@ type DummyDataDB struct {
 	// provide the sql storage for the boolan
 	DummyBool_Data sql.NullBool
 
+	// Declation for basic field dummydataDB.DummyEnumString {{BasicKind}} (to be completed)
+	DummyEnumString_Data sql.NullString
+
+	// Declation for basic field dummydataDB.DummyEnumInt {{BasicKind}} (to be completed)
+	DummyEnumInt_Data sql.NullInt64
+
 	// Declation for basic field dummydataDB.DummyTime
 	DummyTime_Data sql.NullTime
 
@@ -114,9 +120,13 @@ type DummyDataWOP struct {
 
 	DummyBool bool `xlsx:"5"`
 
-	DummyTime time.Time `xlsx:"6"`
+	DummyEnumString models.ElementType `xlsx:"6"`
 
-	DummyDuration time.Duration `xlsx:"7"`
+	DummyEnumInt models.DummnyTypeInt `xlsx:"7"`
+
+	DummyTime time.Time `xlsx:"8"`
+
+	DummyDuration time.Duration `xlsx:"9"`
 	// insertion for WOP pointer fields
 }
 
@@ -128,6 +138,8 @@ var DummyData_Fields = []string{
 	"DummyInt",
 	"DummyFloat",
 	"DummyBool",
+	"DummyEnumString",
+	"DummyEnumInt",
 	"DummyTime",
 	"DummyDuration",
 }
@@ -439,6 +451,12 @@ func (dummydataDB *DummyDataDB) CopyBasicFieldsFromDummyData(dummydata *models.D
 	dummydataDB.DummyBool_Data.Bool = dummydata.DummyBool
 	dummydataDB.DummyBool_Data.Valid = true
 
+	dummydataDB.DummyEnumString_Data.String = dummydata.DummyEnumString.ToString()
+	dummydataDB.DummyEnumString_Data.Valid = true
+
+	dummydataDB.DummyEnumInt_Data.Int64 = int64(dummydata.DummyEnumInt)
+	dummydataDB.DummyEnumInt_Data.Valid = true
+
 	dummydataDB.DummyTime_Data.Time = dummydata.DummyTime
 	dummydataDB.DummyTime_Data.Valid = true
 
@@ -465,6 +483,12 @@ func (dummydataDB *DummyDataDB) CopyBasicFieldsFromDummyDataWOP(dummydata *Dummy
 	dummydataDB.DummyBool_Data.Bool = dummydata.DummyBool
 	dummydataDB.DummyBool_Data.Valid = true
 
+	dummydataDB.DummyEnumString_Data.String = dummydata.DummyEnumString.ToString()
+	dummydataDB.DummyEnumString_Data.Valid = true
+
+	dummydataDB.DummyEnumInt_Data.Int64 = int64(dummydata.DummyEnumInt)
+	dummydataDB.DummyEnumInt_Data.Valid = true
+
 	dummydataDB.DummyTime_Data.Time = dummydata.DummyTime
 	dummydataDB.DummyTime_Data.Valid = true
 
@@ -480,6 +504,8 @@ func (dummydataDB *DummyDataDB) CopyBasicFieldsToDummyData(dummydata *models.Dum
 	dummydata.DummyInt = int(dummydataDB.DummyInt_Data.Int64)
 	dummydata.DummyFloat = dummydataDB.DummyFloat_Data.Float64
 	dummydata.DummyBool = dummydataDB.DummyBool_Data.Bool
+	dummydata.DummyEnumString.FromString(dummydataDB.DummyEnumString_Data.String)
+	dummydata.DummyEnumInt = models.DummnyTypeInt(dummydataDB.DummyEnumInt_Data.Int64)
 	dummydata.DummyTime = dummydataDB.DummyTime_Data.Time
 	dummydata.DummyDuration = time.Duration(dummydataDB.DummyDuration_Data.Int64)
 }
@@ -493,6 +519,8 @@ func (dummydataDB *DummyDataDB) CopyBasicFieldsToDummyDataWOP(dummydata *DummyDa
 	dummydata.DummyInt = int(dummydataDB.DummyInt_Data.Int64)
 	dummydata.DummyFloat = dummydataDB.DummyFloat_Data.Float64
 	dummydata.DummyBool = dummydataDB.DummyBool_Data.Bool
+	dummydata.DummyEnumString.FromString(dummydataDB.DummyEnumString_Data.String)
+	dummydata.DummyEnumInt = models.DummnyTypeInt(dummydataDB.DummyEnumInt_Data.Int64)
 	dummydata.DummyTime = dummydataDB.DummyTime_Data.Time
 	dummydata.DummyDuration = time.Duration(dummydataDB.DummyDuration_Data.Int64)
 }
