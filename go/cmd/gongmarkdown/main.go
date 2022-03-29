@@ -193,7 +193,7 @@ func main() {
 		dummyData2.DummyInt = 43
 		dummyData2.DummyFloat = 5.77
 
-		dummies := []*models.DummyData{dummyData1, dummyData2}
+		dummies := []models.GetFieldsInterface{dummyData1, dummyData2}
 
 		another := (&models.AnotherDummyData{Name: "another"}).Stage()
 		dummyData1.DummyPointerToGongStruct = another
@@ -205,6 +205,7 @@ func main() {
 
 		tableGeneric := GenerateTableFromDummyDatas(dummies)
 		root.SubElements = append(root.SubElements, tableGeneric)
+		SimpleInterfaceCall(dummyData1)
 
 	}
 

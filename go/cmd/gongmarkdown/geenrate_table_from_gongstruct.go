@@ -35,3 +35,7 @@ func GenerateTableFromDummyDatas(gongStructInstances []models.GetFieldsInterface
 
 	return
 }
+
+func SimpleInterfaceCall(gongStructInstances models.GetFieldsInterface) {
+
+}
