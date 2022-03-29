@@ -25,3 +25,7 @@ func (gongBasicField *GongBasicField) GetName() string {
 func (gongBasicField *GongBasicField) GetIndex() int {
 	return gongBasicField.Index
 }
+
+func (gongBasicField *GongBasicField) GetBasicKind() types.BasicKind {
+	return gongBasicField.basicKind
+}

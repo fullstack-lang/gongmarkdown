@@ -3,7 +3,7 @@ module github.com/fullstack-lang/gongmarkdown
 go 1.17
 
 require (
-	github.com/fullstack-lang/gong v0.0.0-20220325141857-b7ace1b6d715
+	github.com/fullstack-lang/gong v0.0.0-20220329004349-ec8a37250673
 	github.com/fullstack-lang/gongdoc v0.0.0-20220325104006-b061f982cca1
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-contrib/static v0.0.1

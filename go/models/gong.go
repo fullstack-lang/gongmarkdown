@@ -1320,3 +1320,29 @@ func (elementtype *ElementType) ToCodeString() (res string) {
 	return
 }
 
+func (dummyData *DummyData) GetFields() (res []string) {
+	res = []string{"Name", "DummyString", "DummyInt", "DummyFloat", "DummyBool"}
+
+	return
+}
+
+func (dummyData *DummyData) GetFieldStringValue(fieldName string) (res string) {
+	switch fieldName {
+	case "Name":
+		res = dummyData.Name
+	case "DummyString":
+		res = dummyData.DummyString
+	case "DummyInt":
+		res = fmt.Sprintf("%d", dummyData.DummyInt)
+	case "DummyFloat":
+		res = fmt.Sprintf("%f", dummyData.DummyFloat)
+	case "DummyBool":
+		res = fmt.Sprintf("%t", dummyData.DummyBool)
+	}
+	return
+}
+
+type GetFieldsInterface interface {
+	GetFieldStringValue(fieldName string) (res string)
+	GetFields() (res []string)
+}
