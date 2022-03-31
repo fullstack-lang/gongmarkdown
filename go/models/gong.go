@@ -17,9 +17,10 @@ type __void struct{}
 // needed for creating set of instances in the stage
 var __member __void
 
-// GetFieldsInterface is the interface met by GongStructs
+// GongStructInterface is the interface met by GongStructs
 // It allows runtime reflexion of instances (without the hassle of the "reflect" package)
-type GetFieldsInterface interface {
+type GongStructInterface interface {
+	GetName() (res string)
 	GetFields() (res []string)
 	GetFieldStringValue(fieldName string) (res string)
 }
@@ -264,7 +265,11 @@ func DeleteORMAnotherDummyData(anotherdummydata *AnotherDummyData) {
 	}
 }
 
-// for satisfaction of GetFields interface
+// for satisfaction of GongStruct interface
+func (anotherdummydata *AnotherDummyData) GetName() (res string) {
+	return anotherdummydata.Name
+}
+
 func (anotherdummydata *AnotherDummyData) GetFields() (res []string) {
 	// list of fields 
 	res = []string{"Name",  }
@@ -382,7 +387,11 @@ func DeleteORMCell(cell *Cell) {
 	}
 }
 
-// for satisfaction of GetFields interface
+// for satisfaction of GongStruct interface
+func (cell *Cell) GetName() (res string) {
+	return cell.Name
+}
+
 func (cell *Cell) GetFields() (res []string) {
 	// list of fields 
 	res = []string{"Name",  }
@@ -500,7 +509,11 @@ func DeleteORMDummyData(dummydata *DummyData) {
 	}
 }
 
-// for satisfaction of GetFields interface
+// for satisfaction of GongStruct interface
+func (dummydata *DummyData) GetName() (res string) {
+	return dummydata.Name
+}
+
 func (dummydata *DummyData) GetFields() (res []string) {
 	// list of fields 
 	res = []string{"Name", "DummyString", "DummyInt", "DummyFloat", "DummyBool", "DummyEnumString", "DummyEnumInt", "DummyTime", "DummyDuration", "DummyPointerToGongStruct",  }
@@ -638,7 +651,11 @@ func DeleteORMElement(element *Element) {
 	}
 }
 
-// for satisfaction of GetFields interface
+// for satisfaction of GongStruct interface
+func (element *Element) GetName() (res string) {
+	return element.Name
+}
+
 func (element *Element) GetFields() (res []string) {
 	// list of fields 
 	res = []string{"Name", "Content", "Type", "SubElements", "Rows",  }
@@ -654,6 +671,20 @@ func (element *Element) GetFieldStringValue(fieldName string) (res string) {
 		res = element.Content
 	case "Type":
 		res = element.Type.ToCodeString()
+	case "SubElements":
+		for idx, __instance__ := range element.SubElements {
+			if idx > 0 {
+				res += "\n"
+			}
+			res += __instance__.Name
+		}
+	case "Rows":
+		for idx, __instance__ := range element.Rows {
+			if idx > 0 {
+				res += "\n"
+			}
+			res += __instance__.Name
+		}
 	}
 	return
 }
@@ -760,7 +791,11 @@ func DeleteORMMarkdownContent(markdowncontent *MarkdownContent) {
 	}
 }
 
-// for satisfaction of GetFields interface
+// for satisfaction of GongStruct interface
+func (markdowncontent *MarkdownContent) GetName() (res string) {
+	return markdowncontent.Name
+}
+
 func (markdowncontent *MarkdownContent) GetFields() (res []string) {
 	// list of fields 
 	res = []string{"Name", "Content", "Root",  }
@@ -884,7 +919,11 @@ func DeleteORMRow(row *Row) {
 	}
 }
 
-// for satisfaction of GetFields interface
+// for satisfaction of GongStruct interface
+func (row *Row) GetName() (res string) {
+	return row.Name
+}
+
 func (row *Row) GetFields() (res []string) {
 	// list of fields 
 	res = []string{"Name", "Cells",  }
@@ -896,6 +935,13 @@ func (row *Row) GetFieldStringValue(fieldName string) (res string) {
 	// string value of fields
 	case "Name":
 		res = row.Name
+	case "Cells":
+		for idx, __instance__ := range row.Cells {
+			if idx > 0 {
+				res += "\n"
+			}
+			res += __instance__.Name
+		}
 	}
 	return
 }

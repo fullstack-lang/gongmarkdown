@@ -270,7 +270,7 @@ export class DummyDataDetailComponent implements OnInit {
 	}
 
 	fillUpNameIfEmpty(event: { value: { Name: string; }; }) {
-		if (this.dummydata.Name == undefined) {
+		if (this.dummydata.Name == "") {
 			this.dummydata.Name = event.value.Name
 		}
 	}
