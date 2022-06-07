@@ -1,6 +1,6 @@
 module github.com/fullstack-lang/gongmarkdown
 
-go 1.17
+go 1.18
 
 require (
 	github.com/fullstack-lang/gong v0.0.0-20220329004349-ec8a37250673

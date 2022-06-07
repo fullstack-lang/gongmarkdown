@@ -267,7 +267,7 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOne() (Error error) {
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
-	cellInstancesToBeRemovedFromTheStage := make(map[*models.Cell]struct{})
+	cellInstancesToBeRemovedFromTheStage := make(map[*models.Cell]any)
 	for key, value := range models.Stage.Cells {
 		cellInstancesToBeRemovedFromTheStage[key] = value
 	}

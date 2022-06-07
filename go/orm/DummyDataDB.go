@@ -323,7 +323,7 @@ func (backRepoDummyData *BackRepoDummyDataStruct) CheckoutPhaseOne() (Error erro
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
-	dummydataInstancesToBeRemovedFromTheStage := make(map[*models.DummyData]struct{})
+	dummydataInstancesToBeRemovedFromTheStage := make(map[*models.DummyData]any)
 	for key, value := range models.Stage.DummyDatas {
 		dummydataInstancesToBeRemovedFromTheStage[key] = value
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 // swagger:ignore
-type __void struct{}
+type __void any
 
 // needed for creating set of instances in the stage
 var __member __void
@@ -28,22 +28,22 @@ type GongStructInterface interface {
 // StageStruct enables storage of staged instances
 // swagger:ignore
 type StageStruct struct { // insertion point for definition of arrays registering instances
-	AnotherDummyDatas           map[*AnotherDummyData]struct{}
+	AnotherDummyDatas           map[*AnotherDummyData]any
 	AnotherDummyDatas_mapString map[string]*AnotherDummyData
 
-	Cells           map[*Cell]struct{}
+	Cells           map[*Cell]any
 	Cells_mapString map[string]*Cell
 
-	DummyDatas           map[*DummyData]struct{}
+	DummyDatas           map[*DummyData]any
 	DummyDatas_mapString map[string]*DummyData
 
-	Elements           map[*Element]struct{}
+	Elements           map[*Element]any
 	Elements_mapString map[string]*Element
 
-	MarkdownContents           map[*MarkdownContent]struct{}
+	MarkdownContents           map[*MarkdownContent]any
 	MarkdownContents_mapString map[string]*MarkdownContent
 
-	Rows           map[*Row]struct{}
+	Rows           map[*Row]any
 	Rows_mapString map[string]*Row
 
 	AllModelsStructCreateCallback AllModelsStructCreateInterface
@@ -91,22 +91,22 @@ type BackRepoInterface interface {
 
 // swagger:ignore instructs the gong compiler (gongc) to avoid this particular struct
 var Stage StageStruct = StageStruct{ // insertion point for array initiatialisation
-	AnotherDummyDatas:           make(map[*AnotherDummyData]struct{}),
+	AnotherDummyDatas:           make(map[*AnotherDummyData]any),
 	AnotherDummyDatas_mapString: make(map[string]*AnotherDummyData),
 
-	Cells:           make(map[*Cell]struct{}),
+	Cells:           make(map[*Cell]any),
 	Cells_mapString: make(map[string]*Cell),
 
-	DummyDatas:           make(map[*DummyData]struct{}),
+	DummyDatas:           make(map[*DummyData]any),
 	DummyDatas_mapString: make(map[string]*DummyData),
 
-	Elements:           make(map[*Element]struct{}),
+	Elements:           make(map[*Element]any),
 	Elements_mapString: make(map[string]*Element),
 
-	MarkdownContents:           make(map[*MarkdownContent]struct{}),
+	MarkdownContents:           make(map[*MarkdownContent]any),
 	MarkdownContents_mapString: make(map[string]*MarkdownContent),
 
-	Rows:           make(map[*Row]struct{}),
+	Rows:           make(map[*Row]any),
 	Rows_mapString: make(map[string]*Row),
 
 	// end of insertion point
@@ -966,22 +966,22 @@ type AllModelsStructDeleteInterface interface { // insertion point for Callbacks
 }
 
 func (stage *StageStruct) Reset() { // insertion point for array reset
-	stage.AnotherDummyDatas = make(map[*AnotherDummyData]struct{})
+	stage.AnotherDummyDatas = make(map[*AnotherDummyData]any)
 	stage.AnotherDummyDatas_mapString = make(map[string]*AnotherDummyData)
 
-	stage.Cells = make(map[*Cell]struct{})
+	stage.Cells = make(map[*Cell]any)
 	stage.Cells_mapString = make(map[string]*Cell)
 
-	stage.DummyDatas = make(map[*DummyData]struct{})
+	stage.DummyDatas = make(map[*DummyData]any)
 	stage.DummyDatas_mapString = make(map[string]*DummyData)
 
-	stage.Elements = make(map[*Element]struct{})
+	stage.Elements = make(map[*Element]any)
 	stage.Elements_mapString = make(map[string]*Element)
 
-	stage.MarkdownContents = make(map[*MarkdownContent]struct{})
+	stage.MarkdownContents = make(map[*MarkdownContent]any)
 	stage.MarkdownContents_mapString = make(map[string]*MarkdownContent)
 
-	stage.Rows = make(map[*Row]struct{})
+	stage.Rows = make(map[*Row]any)
 	stage.Rows_mapString = make(map[string]*Row)
 
 }
@@ -1468,8 +1468,11 @@ func generatesIdentifier(gongStructName string, idx int, instanceName string) (i
 }
 
 // insertion point of functions that provide maps for reverse associations
+
 // generate function for reverse association maps of AnotherDummyData
+
 // generate function for reverse association maps of Cell
+
 // generate function for reverse association maps of DummyData
 func (stageStruct *StageStruct) CreateReverseMap_DummyData_DummyPointerToGongStruct() (res map[*AnotherDummyData][]*DummyData) {
 	res = make(map[*AnotherDummyData][]*DummyData)
@@ -1517,6 +1520,7 @@ func (stageStruct *StageStruct) CreateReverseMap_Element_Rows() (res map[*Row]*E
 	return
 }
 
+
 // generate function for reverse association maps of MarkdownContent
 func (stageStruct *StageStruct) CreateReverseMap_MarkdownContent_Root() (res map[*Element][]*MarkdownContent) {
 	res = make(map[*Element][]*MarkdownContent)
@@ -1552,6 +1556,78 @@ func (stageStruct *StageStruct) CreateReverseMap_Row_Cells() (res map[*Cell]*Row
 	return
 }
 
+
+type GongstructSet interface {
+	map[any]any |
+		// insertion point for generic types
+		map[*AnotherDummyData]any |
+		map[*Cell]any |
+		map[*DummyData]any |
+		map[*Element]any |
+		map[*MarkdownContent]any |
+		map[*Row]any |
+		map[*any]any // because go does not support an extra "|" at the end of type specifications
+}
+
+type GongstructMapString interface {
+	map[any]any |
+		// insertion point for generic types
+		map[string]*AnotherDummyData |
+		map[string]*Cell |
+		map[string]*DummyData |
+		map[string]*Element |
+		map[string]*MarkdownContent |
+		map[string]*Row |
+		map[*any]any // because go does not support an extra "|" at the end of type specifications
+}
+
+// GongGetSet returns the set staged GongstructType instances
+// it is usefull because it allows refactoring of gong struct identifier
+func GongGetSet[Type GongstructSet]() *Type {
+	var ret Type
+
+	switch any(ret).(type) {
+	// insertion point for generic get functions
+	case map[*AnotherDummyData]any:
+		return any(&Stage.AnotherDummyDatas).(*Type)
+	case map[*Cell]any:
+		return any(&Stage.Cells).(*Type)
+	case map[*DummyData]any:
+		return any(&Stage.DummyDatas).(*Type)
+	case map[*Element]any:
+		return any(&Stage.Elements).(*Type)
+	case map[*MarkdownContent]any:
+		return any(&Stage.MarkdownContents).(*Type)
+	case map[*Row]any:
+		return any(&Stage.Rows).(*Type)
+	default:
+		return nil
+	}
+}
+
+// GongGetMap returns the map of staged GongstructType instances
+// it is usefull because it allows refactoring of gong struct identifier
+func GongGetMap[Type GongstructMapString]() *Type {
+	var ret Type
+
+	switch any(ret).(type) {
+	// insertion point for generic get functions
+	case map[string]*AnotherDummyData:
+		return any(&Stage.AnotherDummyDatas_mapString).(*Type)
+	case map[string]*Cell:
+		return any(&Stage.Cells_mapString).(*Type)
+	case map[string]*DummyData:
+		return any(&Stage.DummyDatas_mapString).(*Type)
+	case map[string]*Element:
+		return any(&Stage.Elements_mapString).(*Type)
+	case map[string]*MarkdownContent:
+		return any(&Stage.MarkdownContents_mapString).(*Type)
+	case map[string]*Row:
+		return any(&Stage.Rows_mapString).(*Type)
+	default:
+		return nil
+	}
+}
 
 // insertion point of enum utility functions
 // Utility function for DummnyTypeInt

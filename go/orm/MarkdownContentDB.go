@@ -280,7 +280,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOne()
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
-	markdowncontentInstancesToBeRemovedFromTheStage := make(map[*models.MarkdownContent]struct{})
+	markdowncontentInstancesToBeRemovedFromTheStage := make(map[*models.MarkdownContent]any)
 	for key, value := range models.Stage.MarkdownContents {
 		markdowncontentInstancesToBeRemovedFromTheStage[key] = value
 	}
