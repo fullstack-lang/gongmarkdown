@@ -58,7 +58,7 @@ type AnotherDummyDataDB struct {
 
 	// insertion for basic fields declaration
 
-	// Declation for basic field anotherdummydataDB.Name {{BasicKind}} (to be completed)
+	// Declation for basic field anotherdummydataDB.Name
 	Name_Data sql.NullString
 	// encoding of pointers
 	AnotherDummyDataPointersEnconding

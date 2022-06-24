@@ -62,10 +62,10 @@ type MarkdownContentDB struct {
 
 	// insertion for basic fields declaration
 
-	// Declation for basic field markdowncontentDB.Name {{BasicKind}} (to be completed)
+	// Declation for basic field markdowncontentDB.Name
 	Name_Data sql.NullString
 
-	// Declation for basic field markdowncontentDB.Content {{BasicKind}} (to be completed)
+	// Declation for basic field markdowncontentDB.Content
 	Content_Data sql.NullString
 	// encoding of pointers
 	MarkdownContentPointersEnconding
