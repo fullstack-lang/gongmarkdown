@@ -2,6 +2,7 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,9 @@ import (
 	"sort"
 	"strings"
 )
+
+// errUnkownEnum is returns when a value cannot match enum values
+var errUnkownEnum = errors.New("unkown enum")
 
 // swagger:ignore
 type __void any
@@ -31,20 +35,56 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	AnotherDummyDatas           map[*AnotherDummyData]any
 	AnotherDummyDatas_mapString map[string]*AnotherDummyData
 
+	OnAfterAnotherDummyDataCreateCallback OnAfterCreateInterface[AnotherDummyData]
+	OnAfterAnotherDummyDataUpdateCallback OnAfterUpdateInterface[AnotherDummyData]
+	OnAfterAnotherDummyDataDeleteCallback OnAfterDeleteInterface[AnotherDummyData]
+	OnAfterAnotherDummyDataReadCallback   OnAfterReadInterface[AnotherDummyData]
+
+
 	Cells           map[*Cell]any
 	Cells_mapString map[string]*Cell
+
+	OnAfterCellCreateCallback OnAfterCreateInterface[Cell]
+	OnAfterCellUpdateCallback OnAfterUpdateInterface[Cell]
+	OnAfterCellDeleteCallback OnAfterDeleteInterface[Cell]
+	OnAfterCellReadCallback   OnAfterReadInterface[Cell]
+
 
 	DummyDatas           map[*DummyData]any
 	DummyDatas_mapString map[string]*DummyData
 
+	OnAfterDummyDataCreateCallback OnAfterCreateInterface[DummyData]
+	OnAfterDummyDataUpdateCallback OnAfterUpdateInterface[DummyData]
+	OnAfterDummyDataDeleteCallback OnAfterDeleteInterface[DummyData]
+	OnAfterDummyDataReadCallback   OnAfterReadInterface[DummyData]
+
+
 	Elements           map[*Element]any
 	Elements_mapString map[string]*Element
+
+	OnAfterElementCreateCallback OnAfterCreateInterface[Element]
+	OnAfterElementUpdateCallback OnAfterUpdateInterface[Element]
+	OnAfterElementDeleteCallback OnAfterDeleteInterface[Element]
+	OnAfterElementReadCallback   OnAfterReadInterface[Element]
+
 
 	MarkdownContents           map[*MarkdownContent]any
 	MarkdownContents_mapString map[string]*MarkdownContent
 
+	OnAfterMarkdownContentCreateCallback OnAfterCreateInterface[MarkdownContent]
+	OnAfterMarkdownContentUpdateCallback OnAfterUpdateInterface[MarkdownContent]
+	OnAfterMarkdownContentDeleteCallback OnAfterDeleteInterface[MarkdownContent]
+	OnAfterMarkdownContentReadCallback   OnAfterReadInterface[MarkdownContent]
+
+
 	Rows           map[*Row]any
 	Rows_mapString map[string]*Row
+
+	OnAfterRowCreateCallback OnAfterCreateInterface[Row]
+	OnAfterRowUpdateCallback OnAfterUpdateInterface[Row]
+	OnAfterRowDeleteCallback OnAfterDeleteInterface[Row]
+	OnAfterRowReadCallback   OnAfterReadInterface[Row]
+
 
 	AllModelsStructCreateCallback AllModelsStructCreateInterface
 
@@ -63,6 +103,29 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 
 type OnInitCommitInterface interface {
 	BeforeCommit(stage *StageStruct)
+}
+
+// OnAfterCreateInterface callback when an instance is updated from the front
+type OnAfterCreateInterface[Type Gongstruct] interface {
+	OnAfterCreate(stage *StageStruct,
+		instance *Type)
+}
+
+// OnAfterReadInterface callback when an instance is updated from the front
+type OnAfterReadInterface[Type Gongstruct] interface {
+	OnAfterRead(stage *StageStruct,
+		instance *Type)
+}
+
+// OnAfterUpdateInterface callback when an instance is updated from the front
+type OnAfterUpdateInterface[Type Gongstruct] interface {
+	OnAfterUpdate(stage *StageStruct, old, new *Type)
+}
+
+// OnAfterDeleteInterface callback when an instance is updated from the front
+type OnAfterDeleteInterface[Type Gongstruct] interface {
+	OnAfterDelete(stage *StageStruct,
+		staged, front *Type)
 }
 
 type BackRepoInterface interface {
@@ -1852,7 +1915,7 @@ func (dummnytypeint DummnyTypeInt) ToInt() (res int) {
 	return
 }
 
-func (dummnytypeint *DummnyTypeInt) FromInt(input int) {
+func (dummnytypeint *DummnyTypeInt) FromInt(input int) (err error) {
 
 	switch input {
 	// insertion code per enum code
@@ -1860,7 +1923,10 @@ func (dummnytypeint *DummnyTypeInt) FromInt(input int) {
 		*dummnytypeint = ONE
 	case 1:
 		*dummnytypeint = TWO
+	default:
+		return errUnkownEnum
 	}
+	return
 }
 
 func (dummnytypeint *DummnyTypeInt) ToCodeString() (res string) {
@@ -1893,7 +1959,7 @@ func (elementtype ElementType) ToString() (res string) {
 	return
 }
 
-func (elementtype *ElementType) FromString(input string) {
+func (elementtype *ElementType) FromString(input string) (err error) {
 
 	switch input {
 	// insertion code per enum code
@@ -1903,7 +1969,10 @@ func (elementtype *ElementType) FromString(input string) {
 		*elementtype = TITLE
 	case "Table":
 		*elementtype = TABLE
+	default:
+		return errUnkownEnum
 	}
+	return
 }
 
 func (elementtype *ElementType) ToCodeString() (res string) {
