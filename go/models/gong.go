@@ -40,7 +40,6 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	OnAfterAnotherDummyDataDeleteCallback OnAfterDeleteInterface[AnotherDummyData]
 	OnAfterAnotherDummyDataReadCallback   OnAfterReadInterface[AnotherDummyData]
 
-
 	Cells           map[*Cell]any
 	Cells_mapString map[string]*Cell
 
@@ -48,7 +47,6 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	OnAfterCellUpdateCallback OnAfterUpdateInterface[Cell]
 	OnAfterCellDeleteCallback OnAfterDeleteInterface[Cell]
 	OnAfterCellReadCallback   OnAfterReadInterface[Cell]
-
 
 	DummyDatas           map[*DummyData]any
 	DummyDatas_mapString map[string]*DummyData
@@ -58,7 +56,6 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	OnAfterDummyDataDeleteCallback OnAfterDeleteInterface[DummyData]
 	OnAfterDummyDataReadCallback   OnAfterReadInterface[DummyData]
 
-
 	Elements           map[*Element]any
 	Elements_mapString map[string]*Element
 
@@ -66,7 +63,6 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	OnAfterElementUpdateCallback OnAfterUpdateInterface[Element]
 	OnAfterElementDeleteCallback OnAfterDeleteInterface[Element]
 	OnAfterElementReadCallback   OnAfterReadInterface[Element]
-
 
 	MarkdownContents           map[*MarkdownContent]any
 	MarkdownContents_mapString map[string]*MarkdownContent
@@ -76,7 +72,6 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	OnAfterMarkdownContentDeleteCallback OnAfterDeleteInterface[MarkdownContent]
 	OnAfterMarkdownContentReadCallback   OnAfterReadInterface[MarkdownContent]
 
-
 	Rows           map[*Row]any
 	Rows_mapString map[string]*Row
 
@@ -84,7 +79,6 @@ type StageStruct struct { // insertion point for definition of arrays registerin
 	OnAfterRowUpdateCallback OnAfterUpdateInterface[Row]
 	OnAfterRowDeleteCallback OnAfterDeleteInterface[Row]
 	OnAfterRowReadCallback   OnAfterReadInterface[Row]
-
 
 	AllModelsStructCreateCallback AllModelsStructCreateInterface
 
@@ -874,11 +868,17 @@ import (
 	"{{ModelsPackageName}}"
 )
 
-func init() {
-	var __Dummy_time_variable time.Time
-	_ = __Dummy_time_variable
-	InjectionGateway["{{databaseName}}"] = {{databaseName}}Injection
-}
+// generated in order to avoid error in the package import
+// if there are no elements in the stage to marshall
+var ___dummy__Stage models.StageStruct
+var ___dummy__Time time.Time
+
+// init might be handy if one want to have the data embedded in the binary
+// but it has to properly reference the Injection gateway in the main package
+// func init() {
+// 	_ = __Dummy_time_variable
+// 	InjectionGateway["{{databaseName}}"] = {{databaseName}}Injection
+// }
 
 // {{databaseName}}Injection will stage objects of database "{{databaseName}}"
 func {{databaseName}}Injection() {
@@ -893,7 +893,7 @@ func {{databaseName}}Injection() {
 `
 
 const IdentifiersDecls = `
-	{{Identifier}} := (&models.{{GeneratedStructName}}{Name: "{{GeneratedFieldNameValue}}"}).Stage()`
+	{{Identifier}} := (&models.{{GeneratedStructName}}{Name: ` + "`" + `{{GeneratedFieldNameValue}}` + "`" + `}).Stage()`
 
 const StringInitStatement = `
 	{{Identifier}}.{{GeneratedFieldName}} = ` + "`" + `{{GeneratedFieldNameValue}}` + "`"
@@ -962,7 +962,7 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", anotherdummydata.Name)
 		identifiersDecl += decl
 
-		initializerStatements += fmt.Sprintf("\n\n	// AnotherDummyData %s values setup", anotherdummydata.Name)
+		initializerStatements += "\n\n	// AnotherDummyData values setup"
 		// Initialisation of values
 		setValueField = StringInitStatement
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
@@ -994,7 +994,7 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", cell.Name)
 		identifiersDecl += decl
 
-		initializerStatements += fmt.Sprintf("\n\n	// Cell %s values setup", cell.Name)
+		initializerStatements += "\n\n	// Cell values setup"
 		// Initialisation of values
 		setValueField = StringInitStatement
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
@@ -1026,7 +1026,7 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", dummydata.Name)
 		identifiersDecl += decl
 
-		initializerStatements += fmt.Sprintf("\n\n	// DummyData %s values setup", dummydata.Name)
+		initializerStatements += "\n\n	// DummyData values setup"
 		// Initialisation of values
 		setValueField = StringInitStatement
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
@@ -1108,7 +1108,7 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", element.Name)
 		identifiersDecl += decl
 
-		initializerStatements += fmt.Sprintf("\n\n	// Element %s values setup", element.Name)
+		initializerStatements += "\n\n	// Element values setup"
 		// Initialisation of values
 		setValueField = StringInitStatement
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
@@ -1154,7 +1154,7 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", markdowncontent.Name)
 		identifiersDecl += decl
 
-		initializerStatements += fmt.Sprintf("\n\n	// MarkdownContent %s values setup", markdowncontent.Name)
+		initializerStatements += "\n\n	// MarkdownContent values setup"
 		// Initialisation of values
 		setValueField = StringInitStatement
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
@@ -1192,7 +1192,7 @@ func (stage *StageStruct) Marshall(file *os.File, modelsPackageName, packageName
 		decl = strings.ReplaceAll(decl, "{{GeneratedFieldNameValue}}", row.Name)
 		identifiersDecl += decl
 
-		initializerStatements += fmt.Sprintf("\n\n	// Row %s values setup", row.Name)
+		initializerStatements += "\n\n	// Row values setup"
 		// Initialisation of values
 		setValueField = StringInitStatement
 		setValueField = strings.ReplaceAll(setValueField, "{{Identifier}}", id)
@@ -1929,6 +1929,20 @@ func (dummnytypeint *DummnyTypeInt) FromInt(input int) (err error) {
 	return
 }
 
+func (dummnytypeint *DummnyTypeInt) FromCodeString(input string) (err error) {
+
+	switch input {
+	// insertion code per enum code
+	case "ONE":
+		*dummnytypeint = ONE
+	case "TWO":
+		*dummnytypeint = TWO
+	default:
+		return errUnkownEnum
+	}
+	return
+}
+
 func (dummnytypeint *DummnyTypeInt) ToCodeString() (res string) {
 
 	switch *dummnytypeint {
@@ -1968,6 +1982,22 @@ func (elementtype *ElementType) FromString(input string) (err error) {
 	case "Title":
 		*elementtype = TITLE
 	case "Table":
+		*elementtype = TABLE
+	default:
+		return errUnkownEnum
+	}
+	return
+}
+
+func (elementtype *ElementType) FromCodeString(input string) (err error) {
+
+	switch input {
+	// insertion code per enum code
+	case "PARAGRAPH":
+		*elementtype = PARAGRAPH
+	case "TITLE":
+		*elementtype = TITLE
+	case "TABLE":
 		*elementtype = TABLE
 	default:
 		return errUnkownEnum
