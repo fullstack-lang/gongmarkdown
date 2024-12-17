@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gong/go/db"
 	"github.com/fullstack-lang/gong/go/models"
 )
 
@@ -35,16 +36,20 @@ var dummy_GongEnum_sort sort.Float64Slice
 type GongEnumAPI struct {
 	gorm.Model
 
-	models.GongEnum
+	models.GongEnum_WOP
 
 	// encoding of pointers
-	GongEnumPointersEnconding
+	// for API, it cannot be embedded
+	GongEnumPointersEncoding GongEnumPointersEncoding
 }
 
-// GongEnumPointersEnconding encodes pointers to Struct and
+// GongEnumPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type GongEnumPointersEnconding struct {
+type GongEnumPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
+
+	// field GongEnumValues is a slice of pointers to another Struct (optional or 0..1)
+	GongEnumValues IntSlice `gorm:"type:TEXT"`
 }
 
 // GongEnumDB describes a gongenum in the database
@@ -63,8 +68,10 @@ type GongEnumDB struct {
 
 	// Declation for basic field gongenumDB.Type
 	Type_Data sql.NullInt64
+
 	// encoding of pointers
-	GongEnumPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	GongEnumPointersEncoding
 }
 
 // GongEnumDBs arrays gongenumDBs
@@ -99,56 +106,32 @@ var GongEnum_Fields = []string{
 
 type BackRepoGongEnumStruct struct {
 	// stores GongEnumDB according to their gorm ID
-	Map_GongEnumDBID_GongEnumDB *map[uint]*GongEnumDB
+	Map_GongEnumDBID_GongEnumDB map[uint]*GongEnumDB
 
 	// stores GongEnumDB ID according to GongEnum address
-	Map_GongEnumPtr_GongEnumDBID *map[*models.GongEnum]uint
+	Map_GongEnumPtr_GongEnumDBID map[*models.GongEnum]uint
 
 	// stores GongEnum according to their gorm ID
-	Map_GongEnumDBID_GongEnumPtr *map[uint]*models.GongEnum
+	Map_GongEnumDBID_GongEnumPtr map[uint]*models.GongEnum
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoGongEnum *BackRepoGongEnumStruct) GetDB() *gorm.DB {
+func (backRepoGongEnum *BackRepoGongEnumStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoGongEnum.stage
+	return
+}
+
+func (backRepoGongEnum *BackRepoGongEnumStruct) GetDB() db.DBInterface {
 	return backRepoGongEnum.db
 }
 
 // GetGongEnumDBFromGongEnumPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoGongEnum *BackRepoGongEnumStruct) GetGongEnumDBFromGongEnumPtr(gongenum *models.GongEnum) (gongenumDB *GongEnumDB) {
-	id := (*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum]
-	gongenumDB = (*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[id]
-	return
-}
-
-// BackRepoGongEnum.Init set up the BackRepo of the GongEnum
-func (backRepoGongEnum *BackRepoGongEnumStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr != nil {
-		err := errors.New("In Init, backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr should be nil")
-		return err
-	}
-
-	if backRepoGongEnum.Map_GongEnumDBID_GongEnumDB != nil {
-		err := errors.New("In Init, backRepoGongEnum.Map_GongEnumDBID_GongEnumDB should be nil")
-		return err
-	}
-
-	if backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID != nil {
-		err := errors.New("In Init, backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.GongEnum, 0)
-	backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr = &tmp
-
-	tmpDB := make(map[uint]*GongEnumDB, 0)
-	backRepoGongEnum.Map_GongEnumDBID_GongEnumDB = &tmpDB
-
-	tmpID := make(map[*models.GongEnum]uint, 0)
-	backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID = &tmpID
-
-	backRepoGongEnum.db = db
+	id := backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum]
+	gongenumDB = backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[id]
 	return
 }
 
@@ -162,7 +145,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseOne(stage *models.Sta
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, gongenum := range *backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr {
+	for id, gongenum := range backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr {
 		if _, ok := stage.GongEnums[gongenum]; !ok {
 			backRepoGongEnum.CommitDeleteInstance(id)
 		}
@@ -174,19 +157,20 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseOne(stage *models.Sta
 // BackRepoGongEnum.CommitDeleteInstance commits deletion of GongEnum to the BackRepo
 func (backRepoGongEnum *BackRepoGongEnumStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	gongenum := (*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr)[id]
+	gongenum := backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[id]
 
 	// gongenum is not staged anymore, remove gongenumDB
-	gongenumDB := (*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[id]
-	query := backRepoGongEnum.db.Unscoped().Delete(&gongenumDB)
-	if query.Error != nil {
-		return query.Error
+	gongenumDB := backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[id]
+	db, _ := backRepoGongEnum.db.Unscoped()
+	_, err := db.Delete(gongenumDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID), gongenum)
-	delete((*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr), id)
-	delete((*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB), id)
+	delete(backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID, gongenum)
+	delete(backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr, id)
+	delete(backRepoGongEnum.Map_GongEnumDBID_GongEnumDB, id)
 
 	return
 }
@@ -196,7 +180,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitDeleteInstance(id uint) (E
 func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseOneInstance(gongenum *models.GongEnum) (Error error) {
 
 	// check if the gongenum is not commited yet
-	if _, ok := (*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum]; ok {
+	if _, ok := backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum]; ok {
 		return
 	}
 
@@ -204,15 +188,15 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseOneInstance(gongenum 
 	var gongenumDB GongEnumDB
 	gongenumDB.CopyBasicFieldsFromGongEnum(gongenum)
 
-	query := backRepoGongEnum.db.Create(&gongenumDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoGongEnum.db.Create(&gongenumDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum] = gongenumDB.ID
-	(*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr)[gongenumDB.ID] = gongenum
-	(*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[gongenumDB.ID] = &gongenumDB
+	backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum] = gongenumDB.ID
+	backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[gongenumDB.ID] = gongenum
+	backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[gongenumDB.ID] = &gongenumDB
 
 	return
 }
@@ -221,7 +205,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseOneInstance(gongenum 
 // Phase Two is the update of instance with the field in the database
 func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, gongenum := range *backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr {
+	for idx, gongenum := range backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr {
 		backRepoGongEnum.CommitPhaseTwoInstance(backRepo, idx, gongenum)
 	}
 
@@ -233,33 +217,32 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseTwo(backRepo *BackRep
 func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, gongenum *models.GongEnum) (Error error) {
 
 	// fetch matching gongenumDB
-	if gongenumDB, ok := (*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[idx]; ok {
+	if gongenumDB, ok := backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[idx]; ok {
 
 		gongenumDB.CopyBasicFieldsFromGongEnum(gongenum)
 
 		// insertion point for translating pointers encodings into actual pointers
-		// This loop encodes the slice of pointers gongenum.GongEnumValues into the back repo.
-		// Each back repo instance at the end of the association encode the ID of the association start
-		// into a dedicated field for coding the association. The back repo instance is then saved to the db
-		for idx, gongenumvalueAssocEnd := range gongenum.GongEnumValues {
-
-			// get the back repo instance at the association end
+		// 1. reset
+		gongenumDB.GongEnumPointersEncoding.GongEnumValues = make([]int, 0)
+		// 2. encode
+		for _, gongenumvalueAssocEnd := range gongenum.GongEnumValues {
 			gongenumvalueAssocEnd_DB :=
 				backRepo.BackRepoGongEnumValue.GetGongEnumValueDBFromGongEnumValuePtr(gongenumvalueAssocEnd)
-
-			// encode reverse pointer in the association end back repo instance
-			gongenumvalueAssocEnd_DB.GongEnum_GongEnumValuesDBID.Int64 = int64(gongenumDB.ID)
-			gongenumvalueAssocEnd_DB.GongEnum_GongEnumValuesDBID.Valid = true
-			gongenumvalueAssocEnd_DB.GongEnum_GongEnumValuesDBID_Index.Int64 = int64(idx)
-			gongenumvalueAssocEnd_DB.GongEnum_GongEnumValuesDBID_Index.Valid = true
-			if q := backRepoGongEnum.db.Save(gongenumvalueAssocEnd_DB); q.Error != nil {
-				return q.Error
+			
+			// the stage might be inconsistant, meaning that the gongenumvalueAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if gongenumvalueAssocEnd_DB == nil {
+				continue
 			}
+			
+			gongenumDB.GongEnumPointersEncoding.GongEnumValues =
+				append(gongenumDB.GongEnumPointersEncoding.GongEnumValues, int(gongenumvalueAssocEnd_DB.ID))
 		}
 
-		query := backRepoGongEnum.db.Save(&gongenumDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoGongEnum.db.Save(gongenumDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -274,20 +257,19 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CommitPhaseTwoInstance(backRepo 
 // BackRepoGongEnum.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseOne() (Error error) {
 
 	gongenumDBArray := make([]GongEnumDB, 0)
-	query := backRepoGongEnum.db.Find(&gongenumDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoGongEnum.db.Find(&gongenumDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	gongenumInstancesToBeRemovedFromTheStage := make(map[*models.GongEnum]any)
-	for key, value := range models.Stage.GongEnums {
+	for key, value := range backRepoGongEnum.stage.GongEnums {
 		gongenumInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -297,7 +279,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseOne() (Error error)
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		gongenum, ok := (*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr)[gongenumDB.ID]
+		gongenum, ok := backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[gongenumDB.ID]
 		if ok {
 			delete(gongenumInstancesToBeRemovedFromTheStage, gongenum)
 		}
@@ -305,13 +287,13 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseOne() (Error error)
 
 	// remove from stage and back repo's 3 maps all gongenums that are not in the checkout
 	for gongenum := range gongenumInstancesToBeRemovedFromTheStage {
-		gongenum.Unstage()
+		gongenum.Unstage(backRepoGongEnum.GetStage())
 
 		// remove instance from the back repo 3 maps
-		gongenumID := (*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum]
-		delete((*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID), gongenum)
-		delete((*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB), gongenumID)
-		delete((*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr), gongenumID)
+		gongenumID := backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum]
+		delete(backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID, gongenum)
+		delete(backRepoGongEnum.Map_GongEnumDBID_GongEnumDB, gongenumID)
+		delete(backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr, gongenumID)
 	}
 
 	return
@@ -321,24 +303,27 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseOne() (Error error)
 // models version of the gongenumDB
 func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseOneInstance(gongenumDB *GongEnumDB) (Error error) {
 
-	gongenum, ok := (*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr)[gongenumDB.ID]
+	gongenum, ok := backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[gongenumDB.ID]
 	if !ok {
 		gongenum = new(models.GongEnum)
 
-		(*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr)[gongenumDB.ID] = gongenum
-		(*backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum] = gongenumDB.ID
+		backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[gongenumDB.ID] = gongenum
+		backRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum] = gongenumDB.ID
 
 		// append model store with the new element
 		gongenum.Name = gongenumDB.Name_Data.String
-		gongenum.Stage()
+		gongenum.Stage(backRepoGongEnum.GetStage())
 	}
 	gongenumDB.CopyBasicFieldsToGongEnum(gongenum)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	gongenum.Stage(backRepoGongEnum.GetStage())
 
 	// preserve pointer to gongenumDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_GongEnumDBID_GongEnumDB)[gongenumDB hold variable pointers
 	gongenumDB_Data := *gongenumDB
 	preservedPtrToGongEnum := &gongenumDB_Data
-	(*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[gongenumDB.ID] = preservedPtrToGongEnum
+	backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[gongenumDB.ID] = preservedPtrToGongEnum
 
 	return
 }
@@ -348,7 +333,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseOneInstance(gongenu
 func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, gongenumDB := range *backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
+	for _, gongenumDB := range backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
 		backRepoGongEnum.CheckoutPhaseTwoInstance(backRepo, gongenumDB)
 	}
 	return
@@ -358,8 +343,14 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseTwo(backRepo *BackR
 // Phase Two is the update of instance with the field in the database
 func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, gongenumDB *GongEnumDB) (Error error) {
 
-	gongenum := (*backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr)[gongenumDB.ID]
-	_ = gongenum // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	gongenum := backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[gongenumDB.ID]
+
+	gongenumDB.DecodePointers(backRepo, gongenum)
+
+	return
+}
+
+func (gongenumDB *GongEnumDB) DecodePointers(backRepo *BackRepoStruct, gongenum *models.GongEnum) {
 
 	// insertion point for checkout of pointer encoding
 	// This loop redeem gongenum.GongEnumValues in the stage from the encode in the back repo
@@ -367,27 +358,9 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseTwoInstance(backRep
 	// it appends the stage instance
 	// 1. reset the slice
 	gongenum.GongEnumValues = gongenum.GongEnumValues[:0]
-	// 2. loop all instances in the type in the association end
-	for _, gongenumvalueDB_AssocEnd := range *backRepo.BackRepoGongEnumValue.Map_GongEnumValueDBID_GongEnumValueDB {
-		// 3. Does the ID encoding at the end and the ID at the start matches ?
-		if gongenumvalueDB_AssocEnd.GongEnum_GongEnumValuesDBID.Int64 == int64(gongenumDB.ID) {
-			// 4. fetch the associated instance in the stage
-			gongenumvalue_AssocEnd := (*backRepo.BackRepoGongEnumValue.Map_GongEnumValueDBID_GongEnumValuePtr)[gongenumvalueDB_AssocEnd.ID]
-			// 5. append it the association slice
-			gongenum.GongEnumValues = append(gongenum.GongEnumValues, gongenumvalue_AssocEnd)
-		}
+	for _, _GongEnumValueid := range gongenumDB.GongEnumPointersEncoding.GongEnumValues {
+		gongenum.GongEnumValues = append(gongenum.GongEnumValues, backRepo.BackRepoGongEnumValue.Map_GongEnumValueDBID_GongEnumValuePtr[uint(_GongEnumValueid)])
 	}
-
-	// sort the array according to the order
-	sort.Slice(gongenum.GongEnumValues, func(i, j int) bool {
-		gongenumvalueDB_i_ID := (*backRepo.BackRepoGongEnumValue.Map_GongEnumValuePtr_GongEnumValueDBID)[gongenum.GongEnumValues[i]]
-		gongenumvalueDB_j_ID := (*backRepo.BackRepoGongEnumValue.Map_GongEnumValuePtr_GongEnumValueDBID)[gongenum.GongEnumValues[j]]
-
-		gongenumvalueDB_i := (*backRepo.BackRepoGongEnumValue.Map_GongEnumValueDBID_GongEnumValueDB)[gongenumvalueDB_i_ID]
-		gongenumvalueDB_j := (*backRepo.BackRepoGongEnumValue.Map_GongEnumValueDBID_GongEnumValueDB)[gongenumvalueDB_j_ID]
-
-		return gongenumvalueDB_i.GongEnum_GongEnumValuesDBID_Index.Int64 < gongenumvalueDB_j.GongEnum_GongEnumValuesDBID_Index.Int64
-	})
 
 	return
 }
@@ -395,7 +368,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) CheckoutPhaseTwoInstance(backRep
 // CommitGongEnum allows commit of a single gongenum (if already staged)
 func (backRepo *BackRepoStruct) CommitGongEnum(gongenum *models.GongEnum) {
 	backRepo.BackRepoGongEnum.CommitPhaseOneInstance(gongenum)
-	if id, ok := (*backRepo.BackRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum]; ok {
+	if id, ok := backRepo.BackRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum]; ok {
 		backRepo.BackRepoGongEnum.CommitPhaseTwoInstance(backRepo, id, gongenum)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -404,14 +377,14 @@ func (backRepo *BackRepoStruct) CommitGongEnum(gongenum *models.GongEnum) {
 // CommitGongEnum allows checkout of a single gongenum (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutGongEnum(gongenum *models.GongEnum) {
 	// check if the gongenum is staged
-	if _, ok := (*backRepo.BackRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum]; ok {
+	if _, ok := backRepo.BackRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum]; ok {
 
-		if id, ok := (*backRepo.BackRepoGongEnum.Map_GongEnumPtr_GongEnumDBID)[gongenum]; ok {
+		if id, ok := backRepo.BackRepoGongEnum.Map_GongEnumPtr_GongEnumDBID[gongenum]; ok {
 			var gongenumDB GongEnumDB
 			gongenumDB.ID = id
 
-			if err := backRepo.BackRepoGongEnum.db.First(&gongenumDB, id).Error; err != nil {
-				log.Panicln("CheckoutGongEnum : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoGongEnum.db.First(&gongenumDB, id); err != nil {
+				log.Fatalln("CheckoutGongEnum : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoGongEnum.CheckoutPhaseOneInstance(&gongenumDB)
 			backRepo.BackRepoGongEnum.CheckoutPhaseTwoInstance(backRepo, &gongenumDB)
@@ -421,6 +394,17 @@ func (backRepo *BackRepoStruct) CheckoutGongEnum(gongenum *models.GongEnum) {
 
 // CopyBasicFieldsFromGongEnum
 func (gongenumDB *GongEnumDB) CopyBasicFieldsFromGongEnum(gongenum *models.GongEnum) {
+	// insertion point for fields commit
+
+	gongenumDB.Name_Data.String = gongenum.Name
+	gongenumDB.Name_Data.Valid = true
+
+	gongenumDB.Type_Data.Int64 = int64(gongenum.Type)
+	gongenumDB.Type_Data.Valid = true
+}
+
+// CopyBasicFieldsFromGongEnum_WOP
+func (gongenumDB *GongEnumDB) CopyBasicFieldsFromGongEnum_WOP(gongenum *models.GongEnum_WOP) {
 	// insertion point for fields commit
 
 	gongenumDB.Name_Data.String = gongenum.Name
@@ -448,6 +432,13 @@ func (gongenumDB *GongEnumDB) CopyBasicFieldsToGongEnum(gongenum *models.GongEnu
 	gongenum.Type = models.GongEnumType(gongenumDB.Type_Data.Int64)
 }
 
+// CopyBasicFieldsToGongEnum_WOP
+func (gongenumDB *GongEnumDB) CopyBasicFieldsToGongEnum_WOP(gongenum *models.GongEnum_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	gongenum.Name = gongenumDB.Name_Data.String
+	gongenum.Type = models.GongEnumType(gongenumDB.Type_Data.Int64)
+}
+
 // CopyBasicFieldsToGongEnumWOP
 func (gongenumDB *GongEnumDB) CopyBasicFieldsToGongEnumWOP(gongenum *GongEnumWOP) {
 	gongenum.ID = int(gongenumDB.ID)
@@ -464,7 +455,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*GongEnumDB, 0)
-	for _, gongenumDB := range *backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
+	for _, gongenumDB := range backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
 		forBackup = append(forBackup, gongenumDB)
 	}
 
@@ -475,12 +466,12 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json GongEnum ", filename, " ", err.Error())
+		log.Fatal("Cannot json GongEnum ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json GongEnum file", err.Error())
+		log.Fatal("Cannot write the json GongEnum file", err.Error())
 	}
 }
 
@@ -490,7 +481,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*GongEnumDB, 0)
-	for _, gongenumDB := range *backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
+	for _, gongenumDB := range backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
 		forBackup = append(forBackup, gongenumDB)
 	}
 
@@ -500,7 +491,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("GongEnum")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -525,13 +516,13 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) RestoreXLPhaseOne(file *xlsx.Fil
 	sh, ok := file.Sheet["GongEnum"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoGongEnum.rowVisitorGongEnum)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -551,11 +542,11 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) rowVisitorGongEnum(row *xlsx.Row
 
 		gongenumDB_ID_atBackupTime := gongenumDB.ID
 		gongenumDB.ID = 0
-		query := backRepoGongEnum.db.Create(gongenumDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoGongEnum.db.Create(gongenumDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[gongenumDB.ID] = gongenumDB
+		backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[gongenumDB.ID] = gongenumDB
 		BackRepoGongEnumid_atBckpTime_newID[gongenumDB_ID_atBackupTime] = gongenumDB.ID
 	}
 	return nil
@@ -573,7 +564,7 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) RestorePhaseOne(dirPath string) 
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json GongEnum file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json GongEnum file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -588,16 +579,16 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) RestorePhaseOne(dirPath string) 
 
 		gongenumDB_ID_atBackupTime := gongenumDB.ID
 		gongenumDB.ID = 0
-		query := backRepoGongEnum.db.Create(gongenumDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoGongEnum.db.Create(gongenumDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoGongEnum.Map_GongEnumDBID_GongEnumDB)[gongenumDB.ID] = gongenumDB
+		backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[gongenumDB.ID] = gongenumDB
 		BackRepoGongEnumid_atBckpTime_newID[gongenumDB_ID_atBackupTime] = gongenumDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json GongEnum file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json GongEnum file", err.Error())
 	}
 }
 
@@ -605,19 +596,44 @@ func (backRepoGongEnum *BackRepoGongEnumStruct) RestorePhaseOne(dirPath string) 
 // to compute new index
 func (backRepoGongEnum *BackRepoGongEnumStruct) RestorePhaseTwo() {
 
-	for _, gongenumDB := range *backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
+	for _, gongenumDB := range backRepoGongEnum.Map_GongEnumDBID_GongEnumDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = gongenumDB
 
 		// insertion point for reindexing pointers encoding
 		// update databse with new index encoding
-		query := backRepoGongEnum.db.Model(gongenumDB).Updates(*gongenumDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoGongEnum.db.Model(gongenumDB)
+		_, err := db.Updates(*gongenumDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoGongEnum.ResetReversePointers commits all staged instances of GongEnum to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoGongEnum *BackRepoGongEnumStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, gongenum := range backRepoGongEnum.Map_GongEnumDBID_GongEnumPtr {
+		backRepoGongEnum.ResetReversePointersInstance(backRepo, idx, gongenum)
+	}
+
+	return
+}
+
+func (backRepoGongEnum *BackRepoGongEnumStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, gongenum *models.GongEnum) (Error error) {
+
+	// fetch matching gongenumDB
+	if gongenumDB, ok := backRepoGongEnum.Map_GongEnumDBID_GongEnumDB[idx]; ok {
+		_ = gongenumDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

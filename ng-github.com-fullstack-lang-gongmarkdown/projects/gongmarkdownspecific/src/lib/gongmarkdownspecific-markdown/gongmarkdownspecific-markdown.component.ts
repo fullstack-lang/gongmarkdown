@@ -1,80 +1,48 @@
-import { Component, OnInit } from '@angular/core';
-
-import * as gongmarkdown from 'gongmarkdown'
+import { Component, Input, OnInit, importProvidersFrom } from '@angular/core';
+import * as gongmarkdown from '../../../../gongmarkdown/src/public-api'
 import { Observable, timer } from 'rxjs';
+import { CommonModule } from '@angular/common';
+import { MarkdownModule } from 'ngx-markdown';
+import { HttpClientModule } from '@angular/common/http';
 
 @Component({
   selector: 'lib-gongmarkdownspecific-markdown',
   templateUrl: './gongmarkdownspecific-markdown.component.html',
-  styleUrls: ['./gongmarkdownspecific-markdown.component.css']
+  styleUrls: ['./gongmarkdownspecific-markdown.component.css'],
+  standalone: true,
+  imports: [CommonModule,
+    MarkdownModule, HttpClientModule  ],
+    providers: [],
+
 })
 export class GongmarkdownspecificMarkdownComponent implements OnInit {
 
-  markdownContentDB: gongmarkdown.MarkdownContentDB | undefined
+  @Input() GONG__StackPath: string = ""
+  frontRepo: gongmarkdown.FrontRepo | undefined
 
-  /**
- * the component is refreshed when modification are performed in the back repo 
- * 
- * the checkCommitNbTimer polls the commit number of the back repo
- * if the commit number has increased, it pulls the front repo and redraw the diagram
- */
-  checkCommitNbTimer: Observable<number> = timer(500, 500);
-  lastCommitNb = -1
-  lastPushFromFrontNb = -1
-  currTime: number = 0
+  markdownContent = ``
 
   constructor(
-    private gongmarkdownCommitNbService: gongmarkdown.CommitNbFromBackService,
-    private gongmarkdownPushFromFrontNbService: gongmarkdown.PushFromFrontNbService,
-    private gongmarkdownMarkdownContentService: gongmarkdown.MarkdownContentService
+    private frontRepoService: gongmarkdown.FrontRepoService,
   ) { }
 
   ngOnInit(): void {
+    this.frontRepoService.connectToWebSocket(this.GONG__StackPath).subscribe(
+      frontRepo => {
+        this.frontRepo = frontRepo
 
-    this.checkCommitNbTimer.subscribe(
-      currTime => {
-        this.currTime = currTime
-
-        // see above for the explanation
-        this.gongmarkdownCommitNbService.getCommitNbFromBack().subscribe(
-          commitNb => {
-            if (this.lastCommitNb < commitNb) {
-
-              console.log("last commit nb " + this.lastCommitNb + " new: " + commitNb)
-              this.refresh()
-              this.lastCommitNb = commitNb
-            }
-          }
-        )
-
-        // see above for the explanation
-        this.gongmarkdownPushFromFrontNbService.getPushFromFrontNb().subscribe(
-          pushFromFrontNb => {
-            if (this.lastPushFromFrontNb < pushFromFrontNb) {
-
-              console.log("last commit nb " + this.lastPushFromFrontNb + " new: " + pushFromFrontNb)
-              this.refresh()
-              this.lastPushFromFrontNb = pushFromFrontNb
-            }
-          }
-        )
+        this.refresh()
       }
     )
-
-
   }
 
   refresh(): void {
-    // get the singloton
-    this.gongmarkdownMarkdownContentService.getMarkdownContents().subscribe(
-      markdownContentDBs => {
-        if (markdownContentDBs.length == 1) {
-          this.markdownContentDB = markdownContentDBs[0]
-        } else {
-          console.log("wrong number of markdown content " + markdownContentDBs.length)
-        }
-      }
-    )
+    if (this.frontRepo === undefined) {
+      return
+    }
+    if (this.frontRepo.getFrontArray(gongmarkdown.MarkdownContent.GONGSTRUCT_NAME).length == 1) {
+      let markdownContentObj = this.frontRepo.getFrontArray<gongmarkdown.MarkdownContent>(gongmarkdown.MarkdownContent.GONGSTRUCT_NAME)[0]
+      this.markdownContent = markdownContentObj.Content
+    }
   }
-
 }

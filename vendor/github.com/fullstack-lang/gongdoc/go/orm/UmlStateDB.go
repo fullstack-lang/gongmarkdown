@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongdoc/go/db"
 	"github.com/fullstack-lang/gongdoc/go/models"
 )
 
@@ -35,22 +36,17 @@ var dummy_UmlState_sort sort.Float64Slice
 type UmlStateAPI struct {
 	gorm.Model
 
-	models.UmlState
+	models.UmlState_WOP
 
 	// encoding of pointers
-	UmlStatePointersEnconding
+	// for API, it cannot be embedded
+	UmlStatePointersEncoding UmlStatePointersEncoding
 }
 
-// UmlStatePointersEnconding encodes pointers to Struct and
+// UmlStatePointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type UmlStatePointersEnconding struct {
+type UmlStatePointersEncoding struct {
 	// insertion for pointer fields encoding declaration
-
-	// Implementation of a reverse ID for field Umlsc{}.States []*UmlState
-	Umlsc_StatesDBID sql.NullInt64
-
-	// implementation of the index of the withing the slice
-	Umlsc_StatesDBID_Index sql.NullInt64
 }
 
 // UmlStateDB describes a umlstate in the database
@@ -72,8 +68,10 @@ type UmlStateDB struct {
 
 	// Declation for basic field umlstateDB.Y
 	Y_Data sql.NullFloat64
+
 	// encoding of pointers
-	UmlStatePointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	UmlStatePointersEncoding
 }
 
 // UmlStateDBs arrays umlstateDBs
@@ -111,56 +109,32 @@ var UmlState_Fields = []string{
 
 type BackRepoUmlStateStruct struct {
 	// stores UmlStateDB according to their gorm ID
-	Map_UmlStateDBID_UmlStateDB *map[uint]*UmlStateDB
+	Map_UmlStateDBID_UmlStateDB map[uint]*UmlStateDB
 
 	// stores UmlStateDB ID according to UmlState address
-	Map_UmlStatePtr_UmlStateDBID *map[*models.UmlState]uint
+	Map_UmlStatePtr_UmlStateDBID map[*models.UmlState]uint
 
 	// stores UmlState according to their gorm ID
-	Map_UmlStateDBID_UmlStatePtr *map[uint]*models.UmlState
+	Map_UmlStateDBID_UmlStatePtr map[uint]*models.UmlState
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoUmlState *BackRepoUmlStateStruct) GetDB() *gorm.DB {
+func (backRepoUmlState *BackRepoUmlStateStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoUmlState.stage
+	return
+}
+
+func (backRepoUmlState *BackRepoUmlStateStruct) GetDB() db.DBInterface {
 	return backRepoUmlState.db
 }
 
 // GetUmlStateDBFromUmlStatePtr is a handy function to access the back repo instance from the stage instance
 func (backRepoUmlState *BackRepoUmlStateStruct) GetUmlStateDBFromUmlStatePtr(umlstate *models.UmlState) (umlstateDB *UmlStateDB) {
-	id := (*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate]
-	umlstateDB = (*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[id]
-	return
-}
-
-// BackRepoUmlState.Init set up the BackRepo of the UmlState
-func (backRepoUmlState *BackRepoUmlStateStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoUmlState.Map_UmlStateDBID_UmlStatePtr != nil {
-		err := errors.New("In Init, backRepoUmlState.Map_UmlStateDBID_UmlStatePtr should be nil")
-		return err
-	}
-
-	if backRepoUmlState.Map_UmlStateDBID_UmlStateDB != nil {
-		err := errors.New("In Init, backRepoUmlState.Map_UmlStateDBID_UmlStateDB should be nil")
-		return err
-	}
-
-	if backRepoUmlState.Map_UmlStatePtr_UmlStateDBID != nil {
-		err := errors.New("In Init, backRepoUmlState.Map_UmlStatePtr_UmlStateDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.UmlState, 0)
-	backRepoUmlState.Map_UmlStateDBID_UmlStatePtr = &tmp
-
-	tmpDB := make(map[uint]*UmlStateDB, 0)
-	backRepoUmlState.Map_UmlStateDBID_UmlStateDB = &tmpDB
-
-	tmpID := make(map[*models.UmlState]uint, 0)
-	backRepoUmlState.Map_UmlStatePtr_UmlStateDBID = &tmpID
-
-	backRepoUmlState.db = db
+	id := backRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate]
+	umlstateDB = backRepoUmlState.Map_UmlStateDBID_UmlStateDB[id]
 	return
 }
 
@@ -174,7 +148,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseOne(stage *models.Sta
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, umlstate := range *backRepoUmlState.Map_UmlStateDBID_UmlStatePtr {
+	for id, umlstate := range backRepoUmlState.Map_UmlStateDBID_UmlStatePtr {
 		if _, ok := stage.UmlStates[umlstate]; !ok {
 			backRepoUmlState.CommitDeleteInstance(id)
 		}
@@ -186,19 +160,20 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseOne(stage *models.Sta
 // BackRepoUmlState.CommitDeleteInstance commits deletion of UmlState to the BackRepo
 func (backRepoUmlState *BackRepoUmlStateStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	umlstate := (*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr)[id]
+	umlstate := backRepoUmlState.Map_UmlStateDBID_UmlStatePtr[id]
 
 	// umlstate is not staged anymore, remove umlstateDB
-	umlstateDB := (*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[id]
-	query := backRepoUmlState.db.Unscoped().Delete(&umlstateDB)
-	if query.Error != nil {
-		return query.Error
+	umlstateDB := backRepoUmlState.Map_UmlStateDBID_UmlStateDB[id]
+	db, _ := backRepoUmlState.db.Unscoped()
+	_, err := db.Delete(umlstateDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID), umlstate)
-	delete((*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr), id)
-	delete((*backRepoUmlState.Map_UmlStateDBID_UmlStateDB), id)
+	delete(backRepoUmlState.Map_UmlStatePtr_UmlStateDBID, umlstate)
+	delete(backRepoUmlState.Map_UmlStateDBID_UmlStatePtr, id)
+	delete(backRepoUmlState.Map_UmlStateDBID_UmlStateDB, id)
 
 	return
 }
@@ -208,7 +183,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitDeleteInstance(id uint) (E
 func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseOneInstance(umlstate *models.UmlState) (Error error) {
 
 	// check if the umlstate is not commited yet
-	if _, ok := (*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate]; ok {
+	if _, ok := backRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate]; ok {
 		return
 	}
 
@@ -216,15 +191,15 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseOneInstance(umlstate 
 	var umlstateDB UmlStateDB
 	umlstateDB.CopyBasicFieldsFromUmlState(umlstate)
 
-	query := backRepoUmlState.db.Create(&umlstateDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoUmlState.db.Create(&umlstateDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate] = umlstateDB.ID
-	(*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr)[umlstateDB.ID] = umlstate
-	(*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[umlstateDB.ID] = &umlstateDB
+	backRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate] = umlstateDB.ID
+	backRepoUmlState.Map_UmlStateDBID_UmlStatePtr[umlstateDB.ID] = umlstate
+	backRepoUmlState.Map_UmlStateDBID_UmlStateDB[umlstateDB.ID] = &umlstateDB
 
 	return
 }
@@ -233,7 +208,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseOneInstance(umlstate 
 // Phase Two is the update of instance with the field in the database
 func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, umlstate := range *backRepoUmlState.Map_UmlStateDBID_UmlStatePtr {
+	for idx, umlstate := range backRepoUmlState.Map_UmlStateDBID_UmlStatePtr {
 		backRepoUmlState.CommitPhaseTwoInstance(backRepo, idx, umlstate)
 	}
 
@@ -245,14 +220,14 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseTwo(backRepo *BackRep
 func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, umlstate *models.UmlState) (Error error) {
 
 	// fetch matching umlstateDB
-	if umlstateDB, ok := (*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[idx]; ok {
+	if umlstateDB, ok := backRepoUmlState.Map_UmlStateDBID_UmlStateDB[idx]; ok {
 
 		umlstateDB.CopyBasicFieldsFromUmlState(umlstate)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoUmlState.db.Save(&umlstateDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoUmlState.db.Save(umlstateDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -267,20 +242,19 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CommitPhaseTwoInstance(backRepo 
 // BackRepoUmlState.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseOne() (Error error) {
 
 	umlstateDBArray := make([]UmlStateDB, 0)
-	query := backRepoUmlState.db.Find(&umlstateDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoUmlState.db.Find(&umlstateDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	umlstateInstancesToBeRemovedFromTheStage := make(map[*models.UmlState]any)
-	for key, value := range models.Stage.UmlStates {
+	for key, value := range backRepoUmlState.stage.UmlStates {
 		umlstateInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -290,7 +264,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseOne() (Error error)
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		umlstate, ok := (*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr)[umlstateDB.ID]
+		umlstate, ok := backRepoUmlState.Map_UmlStateDBID_UmlStatePtr[umlstateDB.ID]
 		if ok {
 			delete(umlstateInstancesToBeRemovedFromTheStage, umlstate)
 		}
@@ -298,13 +272,13 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseOne() (Error error)
 
 	// remove from stage and back repo's 3 maps all umlstates that are not in the checkout
 	for umlstate := range umlstateInstancesToBeRemovedFromTheStage {
-		umlstate.Unstage()
+		umlstate.Unstage(backRepoUmlState.GetStage())
 
 		// remove instance from the back repo 3 maps
-		umlstateID := (*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate]
-		delete((*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID), umlstate)
-		delete((*backRepoUmlState.Map_UmlStateDBID_UmlStateDB), umlstateID)
-		delete((*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr), umlstateID)
+		umlstateID := backRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate]
+		delete(backRepoUmlState.Map_UmlStatePtr_UmlStateDBID, umlstate)
+		delete(backRepoUmlState.Map_UmlStateDBID_UmlStateDB, umlstateID)
+		delete(backRepoUmlState.Map_UmlStateDBID_UmlStatePtr, umlstateID)
 	}
 
 	return
@@ -314,24 +288,27 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseOne() (Error error)
 // models version of the umlstateDB
 func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseOneInstance(umlstateDB *UmlStateDB) (Error error) {
 
-	umlstate, ok := (*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr)[umlstateDB.ID]
+	umlstate, ok := backRepoUmlState.Map_UmlStateDBID_UmlStatePtr[umlstateDB.ID]
 	if !ok {
 		umlstate = new(models.UmlState)
 
-		(*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr)[umlstateDB.ID] = umlstate
-		(*backRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate] = umlstateDB.ID
+		backRepoUmlState.Map_UmlStateDBID_UmlStatePtr[umlstateDB.ID] = umlstate
+		backRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate] = umlstateDB.ID
 
 		// append model store with the new element
 		umlstate.Name = umlstateDB.Name_Data.String
-		umlstate.Stage()
+		umlstate.Stage(backRepoUmlState.GetStage())
 	}
 	umlstateDB.CopyBasicFieldsToUmlState(umlstate)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	umlstate.Stage(backRepoUmlState.GetStage())
 
 	// preserve pointer to umlstateDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_UmlStateDBID_UmlStateDB)[umlstateDB hold variable pointers
 	umlstateDB_Data := *umlstateDB
 	preservedPtrToUmlState := &umlstateDB_Data
-	(*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[umlstateDB.ID] = preservedPtrToUmlState
+	backRepoUmlState.Map_UmlStateDBID_UmlStateDB[umlstateDB.ID] = preservedPtrToUmlState
 
 	return
 }
@@ -341,7 +318,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseOneInstance(umlstat
 func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, umlstateDB := range *backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
+	for _, umlstateDB := range backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
 		backRepoUmlState.CheckoutPhaseTwoInstance(backRepo, umlstateDB)
 	}
 	return
@@ -351,8 +328,14 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseTwo(backRepo *BackR
 // Phase Two is the update of instance with the field in the database
 func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, umlstateDB *UmlStateDB) (Error error) {
 
-	umlstate := (*backRepoUmlState.Map_UmlStateDBID_UmlStatePtr)[umlstateDB.ID]
-	_ = umlstate // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	umlstate := backRepoUmlState.Map_UmlStateDBID_UmlStatePtr[umlstateDB.ID]
+
+	umlstateDB.DecodePointers(backRepo, umlstate)
+
+	return
+}
+
+func (umlstateDB *UmlStateDB) DecodePointers(backRepo *BackRepoStruct, umlstate *models.UmlState) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -361,7 +344,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) CheckoutPhaseTwoInstance(backRep
 // CommitUmlState allows commit of a single umlstate (if already staged)
 func (backRepo *BackRepoStruct) CommitUmlState(umlstate *models.UmlState) {
 	backRepo.BackRepoUmlState.CommitPhaseOneInstance(umlstate)
-	if id, ok := (*backRepo.BackRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate]; ok {
+	if id, ok := backRepo.BackRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate]; ok {
 		backRepo.BackRepoUmlState.CommitPhaseTwoInstance(backRepo, id, umlstate)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -370,14 +353,14 @@ func (backRepo *BackRepoStruct) CommitUmlState(umlstate *models.UmlState) {
 // CommitUmlState allows checkout of a single umlstate (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutUmlState(umlstate *models.UmlState) {
 	// check if the umlstate is staged
-	if _, ok := (*backRepo.BackRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate]; ok {
+	if _, ok := backRepo.BackRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate]; ok {
 
-		if id, ok := (*backRepo.BackRepoUmlState.Map_UmlStatePtr_UmlStateDBID)[umlstate]; ok {
+		if id, ok := backRepo.BackRepoUmlState.Map_UmlStatePtr_UmlStateDBID[umlstate]; ok {
 			var umlstateDB UmlStateDB
 			umlstateDB.ID = id
 
-			if err := backRepo.BackRepoUmlState.db.First(&umlstateDB, id).Error; err != nil {
-				log.Panicln("CheckoutUmlState : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoUmlState.db.First(&umlstateDB, id); err != nil {
+				log.Fatalln("CheckoutUmlState : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoUmlState.CheckoutPhaseOneInstance(&umlstateDB)
 			backRepo.BackRepoUmlState.CheckoutPhaseTwoInstance(backRepo, &umlstateDB)
@@ -387,6 +370,20 @@ func (backRepo *BackRepoStruct) CheckoutUmlState(umlstate *models.UmlState) {
 
 // CopyBasicFieldsFromUmlState
 func (umlstateDB *UmlStateDB) CopyBasicFieldsFromUmlState(umlstate *models.UmlState) {
+	// insertion point for fields commit
+
+	umlstateDB.Name_Data.String = umlstate.Name
+	umlstateDB.Name_Data.Valid = true
+
+	umlstateDB.X_Data.Float64 = umlstate.X
+	umlstateDB.X_Data.Valid = true
+
+	umlstateDB.Y_Data.Float64 = umlstate.Y
+	umlstateDB.Y_Data.Valid = true
+}
+
+// CopyBasicFieldsFromUmlState_WOP
+func (umlstateDB *UmlStateDB) CopyBasicFieldsFromUmlState_WOP(umlstate *models.UmlState_WOP) {
 	// insertion point for fields commit
 
 	umlstateDB.Name_Data.String = umlstate.Name
@@ -421,6 +418,14 @@ func (umlstateDB *UmlStateDB) CopyBasicFieldsToUmlState(umlstate *models.UmlStat
 	umlstate.Y = umlstateDB.Y_Data.Float64
 }
 
+// CopyBasicFieldsToUmlState_WOP
+func (umlstateDB *UmlStateDB) CopyBasicFieldsToUmlState_WOP(umlstate *models.UmlState_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	umlstate.Name = umlstateDB.Name_Data.String
+	umlstate.X = umlstateDB.X_Data.Float64
+	umlstate.Y = umlstateDB.Y_Data.Float64
+}
+
 // CopyBasicFieldsToUmlStateWOP
 func (umlstateDB *UmlStateDB) CopyBasicFieldsToUmlStateWOP(umlstate *UmlStateWOP) {
 	umlstate.ID = int(umlstateDB.ID)
@@ -438,7 +443,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*UmlStateDB, 0)
-	for _, umlstateDB := range *backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
+	for _, umlstateDB := range backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
 		forBackup = append(forBackup, umlstateDB)
 	}
 
@@ -449,12 +454,12 @@ func (backRepoUmlState *BackRepoUmlStateStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json UmlState ", filename, " ", err.Error())
+		log.Fatal("Cannot json UmlState ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json UmlState file", err.Error())
+		log.Fatal("Cannot write the json UmlState file", err.Error())
 	}
 }
 
@@ -464,7 +469,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*UmlStateDB, 0)
-	for _, umlstateDB := range *backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
+	for _, umlstateDB := range backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
 		forBackup = append(forBackup, umlstateDB)
 	}
 
@@ -474,7 +479,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("UmlState")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -499,13 +504,13 @@ func (backRepoUmlState *BackRepoUmlStateStruct) RestoreXLPhaseOne(file *xlsx.Fil
 	sh, ok := file.Sheet["UmlState"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoUmlState.rowVisitorUmlState)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -525,11 +530,11 @@ func (backRepoUmlState *BackRepoUmlStateStruct) rowVisitorUmlState(row *xlsx.Row
 
 		umlstateDB_ID_atBackupTime := umlstateDB.ID
 		umlstateDB.ID = 0
-		query := backRepoUmlState.db.Create(umlstateDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoUmlState.db.Create(umlstateDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[umlstateDB.ID] = umlstateDB
+		backRepoUmlState.Map_UmlStateDBID_UmlStateDB[umlstateDB.ID] = umlstateDB
 		BackRepoUmlStateid_atBckpTime_newID[umlstateDB_ID_atBackupTime] = umlstateDB.ID
 	}
 	return nil
@@ -547,7 +552,7 @@ func (backRepoUmlState *BackRepoUmlStateStruct) RestorePhaseOne(dirPath string) 
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json UmlState file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json UmlState file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -562,16 +567,16 @@ func (backRepoUmlState *BackRepoUmlStateStruct) RestorePhaseOne(dirPath string) 
 
 		umlstateDB_ID_atBackupTime := umlstateDB.ID
 		umlstateDB.ID = 0
-		query := backRepoUmlState.db.Create(umlstateDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoUmlState.db.Create(umlstateDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoUmlState.Map_UmlStateDBID_UmlStateDB)[umlstateDB.ID] = umlstateDB
+		backRepoUmlState.Map_UmlStateDBID_UmlStateDB[umlstateDB.ID] = umlstateDB
 		BackRepoUmlStateid_atBckpTime_newID[umlstateDB_ID_atBackupTime] = umlstateDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json UmlState file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json UmlState file", err.Error())
 	}
 }
 
@@ -579,25 +584,44 @@ func (backRepoUmlState *BackRepoUmlStateStruct) RestorePhaseOne(dirPath string) 
 // to compute new index
 func (backRepoUmlState *BackRepoUmlStateStruct) RestorePhaseTwo() {
 
-	for _, umlstateDB := range *backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
+	for _, umlstateDB := range backRepoUmlState.Map_UmlStateDBID_UmlStateDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = umlstateDB
 
 		// insertion point for reindexing pointers encoding
-		// This reindex umlstate.States
-		if umlstateDB.Umlsc_StatesDBID.Int64 != 0 {
-			umlstateDB.Umlsc_StatesDBID.Int64 =
-				int64(BackRepoUmlscid_atBckpTime_newID[uint(umlstateDB.Umlsc_StatesDBID.Int64)])
-		}
-
 		// update databse with new index encoding
-		query := backRepoUmlState.db.Model(umlstateDB).Updates(*umlstateDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoUmlState.db.Model(umlstateDB)
+		_, err := db.Updates(*umlstateDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoUmlState.ResetReversePointers commits all staged instances of UmlState to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoUmlState *BackRepoUmlStateStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, umlstate := range backRepoUmlState.Map_UmlStateDBID_UmlStatePtr {
+		backRepoUmlState.ResetReversePointersInstance(backRepo, idx, umlstate)
+	}
+
+	return
+}
+
+func (backRepoUmlState *BackRepoUmlStateStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, umlstate *models.UmlState) (Error error) {
+
+	// fetch matching umlstateDB
+	if umlstateDB, ok := backRepoUmlState.Map_UmlStateDBID_UmlStateDB[idx]; ok {
+		_ = umlstateDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

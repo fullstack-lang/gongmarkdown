@@ -44,6 +44,11 @@ func (r *Row) WriteSlice(e interface{}, cols int) int {
 			if cell.SetString(``); t.Valid {
 				cell.SetValue(t.String)
 			}
+		case sql.NullTime:
+			cell := r.AddCell()
+			if cell.SetString(``); t.Valid {
+				cell.SetValue(t.Time)
+			}
 		case sql.NullBool:
 			cell := r.AddCell()
 			if cell.SetString(``); t.Valid {
@@ -53,6 +58,11 @@ func (r *Row) WriteSlice(e interface{}, cols int) int {
 			cell := r.AddCell()
 			if cell.SetString(``); t.Valid {
 				cell.SetValue(t.Int64)
+			}
+		case sql.NullInt32:
+			cell := r.AddCell()
+			if cell.SetString(``); t.Valid {
+				cell.SetValue(t.Int32)
 			}
 		case sql.NullFloat64:
 			cell := r.AddCell()
@@ -116,6 +126,11 @@ func (r *Row) WriteStruct(e interface{}, cols int) int {
 			if cell.SetString(``); t.Valid {
 				cell.SetValue(t.String)
 			}
+		case sql.NullTime:
+			cell := r.AddCell()
+			if cell.SetString(``); t.Valid {
+				cell.SetValue(t.Time)
+			}
 		case sql.NullBool:
 			cell := r.AddCell()
 			if cell.SetString(``); t.Valid {
@@ -125,6 +140,11 @@ func (r *Row) WriteStruct(e interface{}, cols int) int {
 			cell := r.AddCell()
 			if cell.SetString(``); t.Valid {
 				cell.SetValue(t.Int64)
+			}
+		case sql.NullInt32:
+			cell := r.AddCell()
+			if cell.SetString(``); t.Valid {
+				cell.SetValue(t.Int32)
 			}
 		case sql.NullFloat64:
 			cell := r.AddCell()

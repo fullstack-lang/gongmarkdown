@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongdoc/go/db"
 	"github.com/fullstack-lang/gongdoc/go/models"
 )
 
@@ -35,22 +36,26 @@ var dummy_Classdiagram_sort sort.Float64Slice
 type ClassdiagramAPI struct {
 	gorm.Model
 
-	models.Classdiagram
+	models.Classdiagram_WOP
 
 	// encoding of pointers
-	ClassdiagramPointersEnconding
+	// for API, it cannot be embedded
+	ClassdiagramPointersEncoding ClassdiagramPointersEncoding
 }
 
-// ClassdiagramPointersEnconding encodes pointers to Struct and
+// ClassdiagramPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type ClassdiagramPointersEnconding struct {
+type ClassdiagramPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
 
-	// Implementation of a reverse ID for field DiagramPackage{}.Classdiagrams []*Classdiagram
-	DiagramPackage_ClassdiagramsDBID sql.NullInt64
+	// field GongStructShapes is a slice of pointers to another Struct (optional or 0..1)
+	GongStructShapes IntSlice `gorm:"type:TEXT"`
 
-	// implementation of the index of the withing the slice
-	DiagramPackage_ClassdiagramsDBID_Index sql.NullInt64
+	// field GongEnumShapes is a slice of pointers to another Struct (optional or 0..1)
+	GongEnumShapes IntSlice `gorm:"type:TEXT"`
+
+	// field NoteShapes is a slice of pointers to another Struct (optional or 0..1)
+	NoteShapes IntSlice `gorm:"type:TEXT"`
 }
 
 // ClassdiagramDB describes a classdiagram in the database
@@ -70,8 +75,10 @@ type ClassdiagramDB struct {
 	// Declation for basic field classdiagramDB.IsInDrawMode
 	// provide the sql storage for the boolan
 	IsInDrawMode_Data sql.NullBool
+
 	// encoding of pointers
-	ClassdiagramPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	ClassdiagramPointersEncoding
 }
 
 // ClassdiagramDBs arrays classdiagramDBs
@@ -106,56 +113,32 @@ var Classdiagram_Fields = []string{
 
 type BackRepoClassdiagramStruct struct {
 	// stores ClassdiagramDB according to their gorm ID
-	Map_ClassdiagramDBID_ClassdiagramDB *map[uint]*ClassdiagramDB
+	Map_ClassdiagramDBID_ClassdiagramDB map[uint]*ClassdiagramDB
 
 	// stores ClassdiagramDB ID according to Classdiagram address
-	Map_ClassdiagramPtr_ClassdiagramDBID *map[*models.Classdiagram]uint
+	Map_ClassdiagramPtr_ClassdiagramDBID map[*models.Classdiagram]uint
 
 	// stores Classdiagram according to their gorm ID
-	Map_ClassdiagramDBID_ClassdiagramPtr *map[uint]*models.Classdiagram
+	Map_ClassdiagramDBID_ClassdiagramPtr map[uint]*models.Classdiagram
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoClassdiagram *BackRepoClassdiagramStruct) GetDB() *gorm.DB {
+func (backRepoClassdiagram *BackRepoClassdiagramStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoClassdiagram.stage
+	return
+}
+
+func (backRepoClassdiagram *BackRepoClassdiagramStruct) GetDB() db.DBInterface {
 	return backRepoClassdiagram.db
 }
 
 // GetClassdiagramDBFromClassdiagramPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) GetClassdiagramDBFromClassdiagramPtr(classdiagram *models.Classdiagram) (classdiagramDB *ClassdiagramDB) {
-	id := (*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram]
-	classdiagramDB = (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[id]
-	return
-}
-
-// BackRepoClassdiagram.Init set up the BackRepo of the Classdiagram
-func (backRepoClassdiagram *BackRepoClassdiagramStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr != nil {
-		err := errors.New("In Init, backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr should be nil")
-		return err
-	}
-
-	if backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB != nil {
-		err := errors.New("In Init, backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB should be nil")
-		return err
-	}
-
-	if backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID != nil {
-		err := errors.New("In Init, backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.Classdiagram, 0)
-	backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr = &tmp
-
-	tmpDB := make(map[uint]*ClassdiagramDB, 0)
-	backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB = &tmpDB
-
-	tmpID := make(map[*models.Classdiagram]uint, 0)
-	backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID = &tmpID
-
-	backRepoClassdiagram.db = db
+	id := backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram]
+	classdiagramDB = backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[id]
 	return
 }
 
@@ -169,7 +152,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseOne(stage *mo
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, classdiagram := range *backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr {
+	for id, classdiagram := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr {
 		if _, ok := stage.Classdiagrams[classdiagram]; !ok {
 			backRepoClassdiagram.CommitDeleteInstance(id)
 		}
@@ -181,19 +164,20 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseOne(stage *mo
 // BackRepoClassdiagram.CommitDeleteInstance commits deletion of Classdiagram to the BackRepo
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	classdiagram := (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr)[id]
+	classdiagram := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr[id]
 
 	// classdiagram is not staged anymore, remove classdiagramDB
-	classdiagramDB := (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[id]
-	query := backRepoClassdiagram.db.Unscoped().Delete(&classdiagramDB)
-	if query.Error != nil {
-		return query.Error
+	classdiagramDB := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[id]
+	db, _ := backRepoClassdiagram.db.Unscoped()
+	_, err := db.Delete(classdiagramDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID), classdiagram)
-	delete((*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr), id)
-	delete((*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB), id)
+	delete(backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID, classdiagram)
+	delete(backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr, id)
+	delete(backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB, id)
 
 	return
 }
@@ -203,7 +187,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitDeleteInstance(id 
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseOneInstance(classdiagram *models.Classdiagram) (Error error) {
 
 	// check if the classdiagram is not commited yet
-	if _, ok := (*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram]; ok {
+	if _, ok := backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram]; ok {
 		return
 	}
 
@@ -211,15 +195,15 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseOneInstance(c
 	var classdiagramDB ClassdiagramDB
 	classdiagramDB.CopyBasicFieldsFromClassdiagram(classdiagram)
 
-	query := backRepoClassdiagram.db.Create(&classdiagramDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoClassdiagram.db.Create(&classdiagramDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram] = classdiagramDB.ID
-	(*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr)[classdiagramDB.ID] = classdiagram
-	(*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[classdiagramDB.ID] = &classdiagramDB
+	backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram] = classdiagramDB.ID
+	backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr[classdiagramDB.ID] = classdiagram
+	backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[classdiagramDB.ID] = &classdiagramDB
 
 	return
 }
@@ -228,7 +212,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseOneInstance(c
 // Phase Two is the update of instance with the field in the database
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, classdiagram := range *backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr {
+	for idx, classdiagram := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr {
 		backRepoClassdiagram.CommitPhaseTwoInstance(backRepo, idx, classdiagram)
 	}
 
@@ -240,52 +224,68 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseTwo(backRepo 
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, classdiagram *models.Classdiagram) (Error error) {
 
 	// fetch matching classdiagramDB
-	if classdiagramDB, ok := (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[idx]; ok {
+	if classdiagramDB, ok := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[idx]; ok {
 
 		classdiagramDB.CopyBasicFieldsFromClassdiagram(classdiagram)
 
 		// insertion point for translating pointers encodings into actual pointers
-		// This loop encodes the slice of pointers classdiagram.Classshapes into the back repo.
-		// Each back repo instance at the end of the association encode the ID of the association start
-		// into a dedicated field for coding the association. The back repo instance is then saved to the db
-		for idx, classshapeAssocEnd := range classdiagram.Classshapes {
-
-			// get the back repo instance at the association end
-			classshapeAssocEnd_DB :=
-				backRepo.BackRepoClassshape.GetClassshapeDBFromClassshapePtr(classshapeAssocEnd)
-
-			// encode reverse pointer in the association end back repo instance
-			classshapeAssocEnd_DB.Classdiagram_ClassshapesDBID.Int64 = int64(classdiagramDB.ID)
-			classshapeAssocEnd_DB.Classdiagram_ClassshapesDBID.Valid = true
-			classshapeAssocEnd_DB.Classdiagram_ClassshapesDBID_Index.Int64 = int64(idx)
-			classshapeAssocEnd_DB.Classdiagram_ClassshapesDBID_Index.Valid = true
-			if q := backRepoClassdiagram.db.Save(classshapeAssocEnd_DB); q.Error != nil {
-				return q.Error
+		// 1. reset
+		classdiagramDB.ClassdiagramPointersEncoding.GongStructShapes = make([]int, 0)
+		// 2. encode
+		for _, gongstructshapeAssocEnd := range classdiagram.GongStructShapes {
+			gongstructshapeAssocEnd_DB :=
+				backRepo.BackRepoGongStructShape.GetGongStructShapeDBFromGongStructShapePtr(gongstructshapeAssocEnd)
+			
+			// the stage might be inconsistant, meaning that the gongstructshapeAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if gongstructshapeAssocEnd_DB == nil {
+				continue
 			}
+			
+			classdiagramDB.ClassdiagramPointersEncoding.GongStructShapes =
+				append(classdiagramDB.ClassdiagramPointersEncoding.GongStructShapes, int(gongstructshapeAssocEnd_DB.ID))
 		}
 
-		// This loop encodes the slice of pointers classdiagram.Notes into the back repo.
-		// Each back repo instance at the end of the association encode the ID of the association start
-		// into a dedicated field for coding the association. The back repo instance is then saved to the db
-		for idx, noteshapeAssocEnd := range classdiagram.Notes {
+		// 1. reset
+		classdiagramDB.ClassdiagramPointersEncoding.GongEnumShapes = make([]int, 0)
+		// 2. encode
+		for _, gongenumshapeAssocEnd := range classdiagram.GongEnumShapes {
+			gongenumshapeAssocEnd_DB :=
+				backRepo.BackRepoGongEnumShape.GetGongEnumShapeDBFromGongEnumShapePtr(gongenumshapeAssocEnd)
+			
+			// the stage might be inconsistant, meaning that the gongenumshapeAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if gongenumshapeAssocEnd_DB == nil {
+				continue
+			}
+			
+			classdiagramDB.ClassdiagramPointersEncoding.GongEnumShapes =
+				append(classdiagramDB.ClassdiagramPointersEncoding.GongEnumShapes, int(gongenumshapeAssocEnd_DB.ID))
+		}
 
-			// get the back repo instance at the association end
+		// 1. reset
+		classdiagramDB.ClassdiagramPointersEncoding.NoteShapes = make([]int, 0)
+		// 2. encode
+		for _, noteshapeAssocEnd := range classdiagram.NoteShapes {
 			noteshapeAssocEnd_DB :=
 				backRepo.BackRepoNoteShape.GetNoteShapeDBFromNoteShapePtr(noteshapeAssocEnd)
-
-			// encode reverse pointer in the association end back repo instance
-			noteshapeAssocEnd_DB.Classdiagram_NotesDBID.Int64 = int64(classdiagramDB.ID)
-			noteshapeAssocEnd_DB.Classdiagram_NotesDBID.Valid = true
-			noteshapeAssocEnd_DB.Classdiagram_NotesDBID_Index.Int64 = int64(idx)
-			noteshapeAssocEnd_DB.Classdiagram_NotesDBID_Index.Valid = true
-			if q := backRepoClassdiagram.db.Save(noteshapeAssocEnd_DB); q.Error != nil {
-				return q.Error
+			
+			// the stage might be inconsistant, meaning that the noteshapeAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if noteshapeAssocEnd_DB == nil {
+				continue
 			}
+			
+			classdiagramDB.ClassdiagramPointersEncoding.NoteShapes =
+				append(classdiagramDB.ClassdiagramPointersEncoding.NoteShapes, int(noteshapeAssocEnd_DB.ID))
 		}
 
-		query := backRepoClassdiagram.db.Save(&classdiagramDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoClassdiagram.db.Save(classdiagramDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -300,20 +300,19 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CommitPhaseTwoInstance(b
 // BackRepoClassdiagram.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseOne() (Error error) {
 
 	classdiagramDBArray := make([]ClassdiagramDB, 0)
-	query := backRepoClassdiagram.db.Find(&classdiagramDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoClassdiagram.db.Find(&classdiagramDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	classdiagramInstancesToBeRemovedFromTheStage := make(map[*models.Classdiagram]any)
-	for key, value := range models.Stage.Classdiagrams {
+	for key, value := range backRepoClassdiagram.stage.Classdiagrams {
 		classdiagramInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -323,7 +322,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseOne() (Erro
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		classdiagram, ok := (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr)[classdiagramDB.ID]
+		classdiagram, ok := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr[classdiagramDB.ID]
 		if ok {
 			delete(classdiagramInstancesToBeRemovedFromTheStage, classdiagram)
 		}
@@ -331,13 +330,13 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseOne() (Erro
 
 	// remove from stage and back repo's 3 maps all classdiagrams that are not in the checkout
 	for classdiagram := range classdiagramInstancesToBeRemovedFromTheStage {
-		classdiagram.Unstage()
+		classdiagram.Unstage(backRepoClassdiagram.GetStage())
 
 		// remove instance from the back repo 3 maps
-		classdiagramID := (*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram]
-		delete((*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID), classdiagram)
-		delete((*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB), classdiagramID)
-		delete((*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr), classdiagramID)
+		classdiagramID := backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram]
+		delete(backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID, classdiagram)
+		delete(backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB, classdiagramID)
+		delete(backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr, classdiagramID)
 	}
 
 	return
@@ -347,24 +346,27 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseOne() (Erro
 // models version of the classdiagramDB
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseOneInstance(classdiagramDB *ClassdiagramDB) (Error error) {
 
-	classdiagram, ok := (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr)[classdiagramDB.ID]
+	classdiagram, ok := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr[classdiagramDB.ID]
 	if !ok {
 		classdiagram = new(models.Classdiagram)
 
-		(*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr)[classdiagramDB.ID] = classdiagram
-		(*backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram] = classdiagramDB.ID
+		backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr[classdiagramDB.ID] = classdiagram
+		backRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram] = classdiagramDB.ID
 
 		// append model store with the new element
 		classdiagram.Name = classdiagramDB.Name_Data.String
-		classdiagram.Stage()
+		classdiagram.Stage(backRepoClassdiagram.GetStage())
 	}
 	classdiagramDB.CopyBasicFieldsToClassdiagram(classdiagram)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	classdiagram.Stage(backRepoClassdiagram.GetStage())
 
 	// preserve pointer to classdiagramDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_ClassdiagramDBID_ClassdiagramDB)[classdiagramDB hold variable pointers
 	classdiagramDB_Data := *classdiagramDB
 	preservedPtrToClassdiagram := &classdiagramDB_Data
-	(*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[classdiagramDB.ID] = preservedPtrToClassdiagram
+	backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[classdiagramDB.ID] = preservedPtrToClassdiagram
 
 	return
 }
@@ -374,7 +376,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseOneInstance
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, classdiagramDB := range *backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
+	for _, classdiagramDB := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
 		backRepoClassdiagram.CheckoutPhaseTwoInstance(backRepo, classdiagramDB)
 	}
 	return
@@ -384,63 +386,42 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseTwo(backRep
 // Phase Two is the update of instance with the field in the database
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, classdiagramDB *ClassdiagramDB) (Error error) {
 
-	classdiagram := (*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr)[classdiagramDB.ID]
-	_ = classdiagram // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	classdiagram := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr[classdiagramDB.ID]
+
+	classdiagramDB.DecodePointers(backRepo, classdiagram)
+
+	return
+}
+
+func (classdiagramDB *ClassdiagramDB) DecodePointers(backRepo *BackRepoStruct, classdiagram *models.Classdiagram) {
 
 	// insertion point for checkout of pointer encoding
-	// This loop redeem classdiagram.Classshapes in the stage from the encode in the back repo
-	// It parses all ClassshapeDB in the back repo and if the reverse pointer encoding matches the back repo ID
+	// This loop redeem classdiagram.GongStructShapes in the stage from the encode in the back repo
+	// It parses all GongStructShapeDB in the back repo and if the reverse pointer encoding matches the back repo ID
 	// it appends the stage instance
 	// 1. reset the slice
-	classdiagram.Classshapes = classdiagram.Classshapes[:0]
-	// 2. loop all instances in the type in the association end
-	for _, classshapeDB_AssocEnd := range *backRepo.BackRepoClassshape.Map_ClassshapeDBID_ClassshapeDB {
-		// 3. Does the ID encoding at the end and the ID at the start matches ?
-		if classshapeDB_AssocEnd.Classdiagram_ClassshapesDBID.Int64 == int64(classdiagramDB.ID) {
-			// 4. fetch the associated instance in the stage
-			classshape_AssocEnd := (*backRepo.BackRepoClassshape.Map_ClassshapeDBID_ClassshapePtr)[classshapeDB_AssocEnd.ID]
-			// 5. append it the association slice
-			classdiagram.Classshapes = append(classdiagram.Classshapes, classshape_AssocEnd)
-		}
+	classdiagram.GongStructShapes = classdiagram.GongStructShapes[:0]
+	for _, _GongStructShapeid := range classdiagramDB.ClassdiagramPointersEncoding.GongStructShapes {
+		classdiagram.GongStructShapes = append(classdiagram.GongStructShapes, backRepo.BackRepoGongStructShape.Map_GongStructShapeDBID_GongStructShapePtr[uint(_GongStructShapeid)])
 	}
 
-	// sort the array according to the order
-	sort.Slice(classdiagram.Classshapes, func(i, j int) bool {
-		classshapeDB_i_ID := (*backRepo.BackRepoClassshape.Map_ClassshapePtr_ClassshapeDBID)[classdiagram.Classshapes[i]]
-		classshapeDB_j_ID := (*backRepo.BackRepoClassshape.Map_ClassshapePtr_ClassshapeDBID)[classdiagram.Classshapes[j]]
+	// This loop redeem classdiagram.GongEnumShapes in the stage from the encode in the back repo
+	// It parses all GongEnumShapeDB in the back repo and if the reverse pointer encoding matches the back repo ID
+	// it appends the stage instance
+	// 1. reset the slice
+	classdiagram.GongEnumShapes = classdiagram.GongEnumShapes[:0]
+	for _, _GongEnumShapeid := range classdiagramDB.ClassdiagramPointersEncoding.GongEnumShapes {
+		classdiagram.GongEnumShapes = append(classdiagram.GongEnumShapes, backRepo.BackRepoGongEnumShape.Map_GongEnumShapeDBID_GongEnumShapePtr[uint(_GongEnumShapeid)])
+	}
 
-		classshapeDB_i := (*backRepo.BackRepoClassshape.Map_ClassshapeDBID_ClassshapeDB)[classshapeDB_i_ID]
-		classshapeDB_j := (*backRepo.BackRepoClassshape.Map_ClassshapeDBID_ClassshapeDB)[classshapeDB_j_ID]
-
-		return classshapeDB_i.Classdiagram_ClassshapesDBID_Index.Int64 < classshapeDB_j.Classdiagram_ClassshapesDBID_Index.Int64
-	})
-
-	// This loop redeem classdiagram.Notes in the stage from the encode in the back repo
+	// This loop redeem classdiagram.NoteShapes in the stage from the encode in the back repo
 	// It parses all NoteShapeDB in the back repo and if the reverse pointer encoding matches the back repo ID
 	// it appends the stage instance
 	// 1. reset the slice
-	classdiagram.Notes = classdiagram.Notes[:0]
-	// 2. loop all instances in the type in the association end
-	for _, noteshapeDB_AssocEnd := range *backRepo.BackRepoNoteShape.Map_NoteShapeDBID_NoteShapeDB {
-		// 3. Does the ID encoding at the end and the ID at the start matches ?
-		if noteshapeDB_AssocEnd.Classdiagram_NotesDBID.Int64 == int64(classdiagramDB.ID) {
-			// 4. fetch the associated instance in the stage
-			noteshape_AssocEnd := (*backRepo.BackRepoNoteShape.Map_NoteShapeDBID_NoteShapePtr)[noteshapeDB_AssocEnd.ID]
-			// 5. append it the association slice
-			classdiagram.Notes = append(classdiagram.Notes, noteshape_AssocEnd)
-		}
+	classdiagram.NoteShapes = classdiagram.NoteShapes[:0]
+	for _, _NoteShapeid := range classdiagramDB.ClassdiagramPointersEncoding.NoteShapes {
+		classdiagram.NoteShapes = append(classdiagram.NoteShapes, backRepo.BackRepoNoteShape.Map_NoteShapeDBID_NoteShapePtr[uint(_NoteShapeid)])
 	}
-
-	// sort the array according to the order
-	sort.Slice(classdiagram.Notes, func(i, j int) bool {
-		noteshapeDB_i_ID := (*backRepo.BackRepoNoteShape.Map_NoteShapePtr_NoteShapeDBID)[classdiagram.Notes[i]]
-		noteshapeDB_j_ID := (*backRepo.BackRepoNoteShape.Map_NoteShapePtr_NoteShapeDBID)[classdiagram.Notes[j]]
-
-		noteshapeDB_i := (*backRepo.BackRepoNoteShape.Map_NoteShapeDBID_NoteShapeDB)[noteshapeDB_i_ID]
-		noteshapeDB_j := (*backRepo.BackRepoNoteShape.Map_NoteShapeDBID_NoteShapeDB)[noteshapeDB_j_ID]
-
-		return noteshapeDB_i.Classdiagram_NotesDBID_Index.Int64 < noteshapeDB_j.Classdiagram_NotesDBID_Index.Int64
-	})
 
 	return
 }
@@ -448,7 +429,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) CheckoutPhaseTwoInstance
 // CommitClassdiagram allows commit of a single classdiagram (if already staged)
 func (backRepo *BackRepoStruct) CommitClassdiagram(classdiagram *models.Classdiagram) {
 	backRepo.BackRepoClassdiagram.CommitPhaseOneInstance(classdiagram)
-	if id, ok := (*backRepo.BackRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram]; ok {
+	if id, ok := backRepo.BackRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram]; ok {
 		backRepo.BackRepoClassdiagram.CommitPhaseTwoInstance(backRepo, id, classdiagram)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -457,14 +438,14 @@ func (backRepo *BackRepoStruct) CommitClassdiagram(classdiagram *models.Classdia
 // CommitClassdiagram allows checkout of a single classdiagram (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutClassdiagram(classdiagram *models.Classdiagram) {
 	// check if the classdiagram is staged
-	if _, ok := (*backRepo.BackRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram]; ok {
+	if _, ok := backRepo.BackRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram]; ok {
 
-		if id, ok := (*backRepo.BackRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID)[classdiagram]; ok {
+		if id, ok := backRepo.BackRepoClassdiagram.Map_ClassdiagramPtr_ClassdiagramDBID[classdiagram]; ok {
 			var classdiagramDB ClassdiagramDB
 			classdiagramDB.ID = id
 
-			if err := backRepo.BackRepoClassdiagram.db.First(&classdiagramDB, id).Error; err != nil {
-				log.Panicln("CheckoutClassdiagram : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoClassdiagram.db.First(&classdiagramDB, id); err != nil {
+				log.Fatalln("CheckoutClassdiagram : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoClassdiagram.CheckoutPhaseOneInstance(&classdiagramDB)
 			backRepo.BackRepoClassdiagram.CheckoutPhaseTwoInstance(backRepo, &classdiagramDB)
@@ -474,6 +455,17 @@ func (backRepo *BackRepoStruct) CheckoutClassdiagram(classdiagram *models.Classd
 
 // CopyBasicFieldsFromClassdiagram
 func (classdiagramDB *ClassdiagramDB) CopyBasicFieldsFromClassdiagram(classdiagram *models.Classdiagram) {
+	// insertion point for fields commit
+
+	classdiagramDB.Name_Data.String = classdiagram.Name
+	classdiagramDB.Name_Data.Valid = true
+
+	classdiagramDB.IsInDrawMode_Data.Bool = classdiagram.IsInDrawMode
+	classdiagramDB.IsInDrawMode_Data.Valid = true
+}
+
+// CopyBasicFieldsFromClassdiagram_WOP
+func (classdiagramDB *ClassdiagramDB) CopyBasicFieldsFromClassdiagram_WOP(classdiagram *models.Classdiagram_WOP) {
 	// insertion point for fields commit
 
 	classdiagramDB.Name_Data.String = classdiagram.Name
@@ -501,6 +493,13 @@ func (classdiagramDB *ClassdiagramDB) CopyBasicFieldsToClassdiagram(classdiagram
 	classdiagram.IsInDrawMode = classdiagramDB.IsInDrawMode_Data.Bool
 }
 
+// CopyBasicFieldsToClassdiagram_WOP
+func (classdiagramDB *ClassdiagramDB) CopyBasicFieldsToClassdiagram_WOP(classdiagram *models.Classdiagram_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	classdiagram.Name = classdiagramDB.Name_Data.String
+	classdiagram.IsInDrawMode = classdiagramDB.IsInDrawMode_Data.Bool
+}
+
 // CopyBasicFieldsToClassdiagramWOP
 func (classdiagramDB *ClassdiagramDB) CopyBasicFieldsToClassdiagramWOP(classdiagram *ClassdiagramWOP) {
 	classdiagram.ID = int(classdiagramDB.ID)
@@ -517,7 +516,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*ClassdiagramDB, 0)
-	for _, classdiagramDB := range *backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
+	for _, classdiagramDB := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
 		forBackup = append(forBackup, classdiagramDB)
 	}
 
@@ -528,12 +527,12 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json Classdiagram ", filename, " ", err.Error())
+		log.Fatal("Cannot json Classdiagram ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json Classdiagram file", err.Error())
+		log.Fatal("Cannot write the json Classdiagram file", err.Error())
 	}
 }
 
@@ -543,7 +542,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) BackupXL(file *xlsx.File
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*ClassdiagramDB, 0)
-	for _, classdiagramDB := range *backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
+	for _, classdiagramDB := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
 		forBackup = append(forBackup, classdiagramDB)
 	}
 
@@ -553,7 +552,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) BackupXL(file *xlsx.File
 
 	sh, err := file.AddSheet("Classdiagram")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -578,13 +577,13 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) RestoreXLPhaseOne(file *
 	sh, ok := file.Sheet["Classdiagram"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoClassdiagram.rowVisitorClassdiagram)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -604,11 +603,11 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) rowVisitorClassdiagram(r
 
 		classdiagramDB_ID_atBackupTime := classdiagramDB.ID
 		classdiagramDB.ID = 0
-		query := backRepoClassdiagram.db.Create(classdiagramDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoClassdiagram.db.Create(classdiagramDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[classdiagramDB.ID] = classdiagramDB
+		backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[classdiagramDB.ID] = classdiagramDB
 		BackRepoClassdiagramid_atBckpTime_newID[classdiagramDB_ID_atBackupTime] = classdiagramDB.ID
 	}
 	return nil
@@ -626,7 +625,7 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) RestorePhaseOne(dirPath 
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json Classdiagram file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json Classdiagram file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -641,16 +640,16 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) RestorePhaseOne(dirPath 
 
 		classdiagramDB_ID_atBackupTime := classdiagramDB.ID
 		classdiagramDB.ID = 0
-		query := backRepoClassdiagram.db.Create(classdiagramDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoClassdiagram.db.Create(classdiagramDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB)[classdiagramDB.ID] = classdiagramDB
+		backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[classdiagramDB.ID] = classdiagramDB
 		BackRepoClassdiagramid_atBckpTime_newID[classdiagramDB_ID_atBackupTime] = classdiagramDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json Classdiagram file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json Classdiagram file", err.Error())
 	}
 }
 
@@ -658,25 +657,44 @@ func (backRepoClassdiagram *BackRepoClassdiagramStruct) RestorePhaseOne(dirPath 
 // to compute new index
 func (backRepoClassdiagram *BackRepoClassdiagramStruct) RestorePhaseTwo() {
 
-	for _, classdiagramDB := range *backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
+	for _, classdiagramDB := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = classdiagramDB
 
 		// insertion point for reindexing pointers encoding
-		// This reindex classdiagram.Classdiagrams
-		if classdiagramDB.DiagramPackage_ClassdiagramsDBID.Int64 != 0 {
-			classdiagramDB.DiagramPackage_ClassdiagramsDBID.Int64 =
-				int64(BackRepoDiagramPackageid_atBckpTime_newID[uint(classdiagramDB.DiagramPackage_ClassdiagramsDBID.Int64)])
-		}
-
 		// update databse with new index encoding
-		query := backRepoClassdiagram.db.Model(classdiagramDB).Updates(*classdiagramDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoClassdiagram.db.Model(classdiagramDB)
+		_, err := db.Updates(*classdiagramDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoClassdiagram.ResetReversePointers commits all staged instances of Classdiagram to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoClassdiagram *BackRepoClassdiagramStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, classdiagram := range backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramPtr {
+		backRepoClassdiagram.ResetReversePointersInstance(backRepo, idx, classdiagram)
+	}
+
+	return
+}
+
+func (backRepoClassdiagram *BackRepoClassdiagramStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, classdiagram *models.Classdiagram) (Error error) {
+
+	// fetch matching classdiagramDB
+	if classdiagramDB, ok := backRepoClassdiagram.Map_ClassdiagramDBID_ClassdiagramDB[idx]; ok {
+		_ = classdiagramDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

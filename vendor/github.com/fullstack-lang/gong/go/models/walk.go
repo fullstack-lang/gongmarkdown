@@ -4,8 +4,11 @@ import (
 	"go/parser"
 	"go/token"
 	"log"
+	"os"
 	"path/filepath"
-	"time"
+
+	// to parse the .frontignore file
+	"github.com/fullstack-lang/gong/go/ignore"
 )
 
 // Walk parses go files in the `models` directory pointed by relativePathToModel and
@@ -13,7 +16,7 @@ import (
 //
 // if useParse is used, Walk uses go/parser.Parser
 //
-// Walk leverages go Parser capabilities to fetch identifiers in go files
+// # Walk leverages go Parser capabilities to fetch identifiers in go files
 //
 // The algo is in several steps:
 // - First pass gather Gongstruct & Gongenums identifiers
@@ -26,9 +29,9 @@ func Walk(relativePathToModel string, modelPkg *ModelPkg) {
 	}
 
 	fset := token.NewFileSet()
-	startParser := time.Now()
+	// startParser := time.Now()
 	pkgsParser, errParser := parser.ParseDir(fset, directory, nil, parser.ParseComments)
-	log.Printf("Parser took %s", time.Since(startParser))
+	// log.Printf("Parser took %s", time.Since(startParser))
 
 	if errParser != nil {
 		log.Panic("Unable to parser ", errParser.Error())
@@ -37,5 +40,22 @@ func Walk(relativePathToModel string, modelPkg *ModelPkg) {
 		log.Panic("Unable to parser, wrong number of parsers ", len(pkgsParser))
 	}
 
-	WalkParser(pkgsParser, modelPkg)
+	filepath := filepath.Join(relativePathToModel, ".frontignore")
+
+	// Parse the gitignore file
+	goGitignoreEntries, err := ignore.ParseGoGitignore(filepath)
+	_ = goGitignoreEntries
+
+	if err != nil {
+		if _, ok := err.(*os.PathError); ok {
+			// log.Println("No .frontignore file present")
+		} else {
+			log.Fatalf("Failed to compile .frontignore: %v", err)
+		}
+	}
+
+	WalkParser(pkgsParser, modelPkg, &goGitignoreEntries)
+
+	// fetch meta information
+	inspectMeta(modelPkg.GetStage(), pkgsParser["models"])
 }

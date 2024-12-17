@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongdoc/go/db"
 	"github.com/fullstack-lang/gongdoc/go/models"
 )
 
@@ -35,15 +36,16 @@ var dummy_Position_sort sort.Float64Slice
 type PositionAPI struct {
 	gorm.Model
 
-	models.Position
+	models.Position_WOP
 
 	// encoding of pointers
-	PositionPointersEnconding
+	// for API, it cannot be embedded
+	PositionPointersEncoding PositionPointersEncoding
 }
 
-// PositionPointersEnconding encodes pointers to Struct and
+// PositionPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type PositionPointersEnconding struct {
+type PositionPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
 }
 
@@ -66,8 +68,10 @@ type PositionDB struct {
 
 	// Declation for basic field positionDB.Name
 	Name_Data sql.NullString
+
 	// encoding of pointers
-	PositionPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	PositionPointersEncoding
 }
 
 // PositionDBs arrays positionDBs
@@ -105,56 +109,32 @@ var Position_Fields = []string{
 
 type BackRepoPositionStruct struct {
 	// stores PositionDB according to their gorm ID
-	Map_PositionDBID_PositionDB *map[uint]*PositionDB
+	Map_PositionDBID_PositionDB map[uint]*PositionDB
 
 	// stores PositionDB ID according to Position address
-	Map_PositionPtr_PositionDBID *map[*models.Position]uint
+	Map_PositionPtr_PositionDBID map[*models.Position]uint
 
 	// stores Position according to their gorm ID
-	Map_PositionDBID_PositionPtr *map[uint]*models.Position
+	Map_PositionDBID_PositionPtr map[uint]*models.Position
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoPosition *BackRepoPositionStruct) GetDB() *gorm.DB {
+func (backRepoPosition *BackRepoPositionStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoPosition.stage
+	return
+}
+
+func (backRepoPosition *BackRepoPositionStruct) GetDB() db.DBInterface {
 	return backRepoPosition.db
 }
 
 // GetPositionDBFromPositionPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoPosition *BackRepoPositionStruct) GetPositionDBFromPositionPtr(position *models.Position) (positionDB *PositionDB) {
-	id := (*backRepoPosition.Map_PositionPtr_PositionDBID)[position]
-	positionDB = (*backRepoPosition.Map_PositionDBID_PositionDB)[id]
-	return
-}
-
-// BackRepoPosition.Init set up the BackRepo of the Position
-func (backRepoPosition *BackRepoPositionStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoPosition.Map_PositionDBID_PositionPtr != nil {
-		err := errors.New("In Init, backRepoPosition.Map_PositionDBID_PositionPtr should be nil")
-		return err
-	}
-
-	if backRepoPosition.Map_PositionDBID_PositionDB != nil {
-		err := errors.New("In Init, backRepoPosition.Map_PositionDBID_PositionDB should be nil")
-		return err
-	}
-
-	if backRepoPosition.Map_PositionPtr_PositionDBID != nil {
-		err := errors.New("In Init, backRepoPosition.Map_PositionPtr_PositionDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.Position, 0)
-	backRepoPosition.Map_PositionDBID_PositionPtr = &tmp
-
-	tmpDB := make(map[uint]*PositionDB, 0)
-	backRepoPosition.Map_PositionDBID_PositionDB = &tmpDB
-
-	tmpID := make(map[*models.Position]uint, 0)
-	backRepoPosition.Map_PositionPtr_PositionDBID = &tmpID
-
-	backRepoPosition.db = db
+	id := backRepoPosition.Map_PositionPtr_PositionDBID[position]
+	positionDB = backRepoPosition.Map_PositionDBID_PositionDB[id]
 	return
 }
 
@@ -168,7 +148,7 @@ func (backRepoPosition *BackRepoPositionStruct) CommitPhaseOne(stage *models.Sta
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, position := range *backRepoPosition.Map_PositionDBID_PositionPtr {
+	for id, position := range backRepoPosition.Map_PositionDBID_PositionPtr {
 		if _, ok := stage.Positions[position]; !ok {
 			backRepoPosition.CommitDeleteInstance(id)
 		}
@@ -180,19 +160,20 @@ func (backRepoPosition *BackRepoPositionStruct) CommitPhaseOne(stage *models.Sta
 // BackRepoPosition.CommitDeleteInstance commits deletion of Position to the BackRepo
 func (backRepoPosition *BackRepoPositionStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	position := (*backRepoPosition.Map_PositionDBID_PositionPtr)[id]
+	position := backRepoPosition.Map_PositionDBID_PositionPtr[id]
 
 	// position is not staged anymore, remove positionDB
-	positionDB := (*backRepoPosition.Map_PositionDBID_PositionDB)[id]
-	query := backRepoPosition.db.Unscoped().Delete(&positionDB)
-	if query.Error != nil {
-		return query.Error
+	positionDB := backRepoPosition.Map_PositionDBID_PositionDB[id]
+	db, _ := backRepoPosition.db.Unscoped()
+	_, err := db.Delete(positionDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoPosition.Map_PositionPtr_PositionDBID), position)
-	delete((*backRepoPosition.Map_PositionDBID_PositionPtr), id)
-	delete((*backRepoPosition.Map_PositionDBID_PositionDB), id)
+	delete(backRepoPosition.Map_PositionPtr_PositionDBID, position)
+	delete(backRepoPosition.Map_PositionDBID_PositionPtr, id)
+	delete(backRepoPosition.Map_PositionDBID_PositionDB, id)
 
 	return
 }
@@ -202,7 +183,7 @@ func (backRepoPosition *BackRepoPositionStruct) CommitDeleteInstance(id uint) (E
 func (backRepoPosition *BackRepoPositionStruct) CommitPhaseOneInstance(position *models.Position) (Error error) {
 
 	// check if the position is not commited yet
-	if _, ok := (*backRepoPosition.Map_PositionPtr_PositionDBID)[position]; ok {
+	if _, ok := backRepoPosition.Map_PositionPtr_PositionDBID[position]; ok {
 		return
 	}
 
@@ -210,15 +191,15 @@ func (backRepoPosition *BackRepoPositionStruct) CommitPhaseOneInstance(position 
 	var positionDB PositionDB
 	positionDB.CopyBasicFieldsFromPosition(position)
 
-	query := backRepoPosition.db.Create(&positionDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoPosition.db.Create(&positionDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoPosition.Map_PositionPtr_PositionDBID)[position] = positionDB.ID
-	(*backRepoPosition.Map_PositionDBID_PositionPtr)[positionDB.ID] = position
-	(*backRepoPosition.Map_PositionDBID_PositionDB)[positionDB.ID] = &positionDB
+	backRepoPosition.Map_PositionPtr_PositionDBID[position] = positionDB.ID
+	backRepoPosition.Map_PositionDBID_PositionPtr[positionDB.ID] = position
+	backRepoPosition.Map_PositionDBID_PositionDB[positionDB.ID] = &positionDB
 
 	return
 }
@@ -227,7 +208,7 @@ func (backRepoPosition *BackRepoPositionStruct) CommitPhaseOneInstance(position 
 // Phase Two is the update of instance with the field in the database
 func (backRepoPosition *BackRepoPositionStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, position := range *backRepoPosition.Map_PositionDBID_PositionPtr {
+	for idx, position := range backRepoPosition.Map_PositionDBID_PositionPtr {
 		backRepoPosition.CommitPhaseTwoInstance(backRepo, idx, position)
 	}
 
@@ -239,14 +220,14 @@ func (backRepoPosition *BackRepoPositionStruct) CommitPhaseTwo(backRepo *BackRep
 func (backRepoPosition *BackRepoPositionStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, position *models.Position) (Error error) {
 
 	// fetch matching positionDB
-	if positionDB, ok := (*backRepoPosition.Map_PositionDBID_PositionDB)[idx]; ok {
+	if positionDB, ok := backRepoPosition.Map_PositionDBID_PositionDB[idx]; ok {
 
 		positionDB.CopyBasicFieldsFromPosition(position)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoPosition.db.Save(&positionDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoPosition.db.Save(positionDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -261,20 +242,19 @@ func (backRepoPosition *BackRepoPositionStruct) CommitPhaseTwoInstance(backRepo 
 // BackRepoPosition.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseOne() (Error error) {
 
 	positionDBArray := make([]PositionDB, 0)
-	query := backRepoPosition.db.Find(&positionDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoPosition.db.Find(&positionDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	positionInstancesToBeRemovedFromTheStage := make(map[*models.Position]any)
-	for key, value := range models.Stage.Positions {
+	for key, value := range backRepoPosition.stage.Positions {
 		positionInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -284,7 +264,7 @@ func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseOne() (Error error)
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		position, ok := (*backRepoPosition.Map_PositionDBID_PositionPtr)[positionDB.ID]
+		position, ok := backRepoPosition.Map_PositionDBID_PositionPtr[positionDB.ID]
 		if ok {
 			delete(positionInstancesToBeRemovedFromTheStage, position)
 		}
@@ -292,13 +272,13 @@ func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseOne() (Error error)
 
 	// remove from stage and back repo's 3 maps all positions that are not in the checkout
 	for position := range positionInstancesToBeRemovedFromTheStage {
-		position.Unstage()
+		position.Unstage(backRepoPosition.GetStage())
 
 		// remove instance from the back repo 3 maps
-		positionID := (*backRepoPosition.Map_PositionPtr_PositionDBID)[position]
-		delete((*backRepoPosition.Map_PositionPtr_PositionDBID), position)
-		delete((*backRepoPosition.Map_PositionDBID_PositionDB), positionID)
-		delete((*backRepoPosition.Map_PositionDBID_PositionPtr), positionID)
+		positionID := backRepoPosition.Map_PositionPtr_PositionDBID[position]
+		delete(backRepoPosition.Map_PositionPtr_PositionDBID, position)
+		delete(backRepoPosition.Map_PositionDBID_PositionDB, positionID)
+		delete(backRepoPosition.Map_PositionDBID_PositionPtr, positionID)
 	}
 
 	return
@@ -308,24 +288,27 @@ func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseOne() (Error error)
 // models version of the positionDB
 func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseOneInstance(positionDB *PositionDB) (Error error) {
 
-	position, ok := (*backRepoPosition.Map_PositionDBID_PositionPtr)[positionDB.ID]
+	position, ok := backRepoPosition.Map_PositionDBID_PositionPtr[positionDB.ID]
 	if !ok {
 		position = new(models.Position)
 
-		(*backRepoPosition.Map_PositionDBID_PositionPtr)[positionDB.ID] = position
-		(*backRepoPosition.Map_PositionPtr_PositionDBID)[position] = positionDB.ID
+		backRepoPosition.Map_PositionDBID_PositionPtr[positionDB.ID] = position
+		backRepoPosition.Map_PositionPtr_PositionDBID[position] = positionDB.ID
 
 		// append model store with the new element
 		position.Name = positionDB.Name_Data.String
-		position.Stage()
+		position.Stage(backRepoPosition.GetStage())
 	}
 	positionDB.CopyBasicFieldsToPosition(position)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	position.Stage(backRepoPosition.GetStage())
 
 	// preserve pointer to positionDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_PositionDBID_PositionDB)[positionDB hold variable pointers
 	positionDB_Data := *positionDB
 	preservedPtrToPosition := &positionDB_Data
-	(*backRepoPosition.Map_PositionDBID_PositionDB)[positionDB.ID] = preservedPtrToPosition
+	backRepoPosition.Map_PositionDBID_PositionDB[positionDB.ID] = preservedPtrToPosition
 
 	return
 }
@@ -335,7 +318,7 @@ func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseOneInstance(positio
 func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, positionDB := range *backRepoPosition.Map_PositionDBID_PositionDB {
+	for _, positionDB := range backRepoPosition.Map_PositionDBID_PositionDB {
 		backRepoPosition.CheckoutPhaseTwoInstance(backRepo, positionDB)
 	}
 	return
@@ -345,8 +328,14 @@ func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseTwo(backRepo *BackR
 // Phase Two is the update of instance with the field in the database
 func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, positionDB *PositionDB) (Error error) {
 
-	position := (*backRepoPosition.Map_PositionDBID_PositionPtr)[positionDB.ID]
-	_ = position // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	position := backRepoPosition.Map_PositionDBID_PositionPtr[positionDB.ID]
+
+	positionDB.DecodePointers(backRepo, position)
+
+	return
+}
+
+func (positionDB *PositionDB) DecodePointers(backRepo *BackRepoStruct, position *models.Position) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -355,7 +344,7 @@ func (backRepoPosition *BackRepoPositionStruct) CheckoutPhaseTwoInstance(backRep
 // CommitPosition allows commit of a single position (if already staged)
 func (backRepo *BackRepoStruct) CommitPosition(position *models.Position) {
 	backRepo.BackRepoPosition.CommitPhaseOneInstance(position)
-	if id, ok := (*backRepo.BackRepoPosition.Map_PositionPtr_PositionDBID)[position]; ok {
+	if id, ok := backRepo.BackRepoPosition.Map_PositionPtr_PositionDBID[position]; ok {
 		backRepo.BackRepoPosition.CommitPhaseTwoInstance(backRepo, id, position)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -364,14 +353,14 @@ func (backRepo *BackRepoStruct) CommitPosition(position *models.Position) {
 // CommitPosition allows checkout of a single position (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutPosition(position *models.Position) {
 	// check if the position is staged
-	if _, ok := (*backRepo.BackRepoPosition.Map_PositionPtr_PositionDBID)[position]; ok {
+	if _, ok := backRepo.BackRepoPosition.Map_PositionPtr_PositionDBID[position]; ok {
 
-		if id, ok := (*backRepo.BackRepoPosition.Map_PositionPtr_PositionDBID)[position]; ok {
+		if id, ok := backRepo.BackRepoPosition.Map_PositionPtr_PositionDBID[position]; ok {
 			var positionDB PositionDB
 			positionDB.ID = id
 
-			if err := backRepo.BackRepoPosition.db.First(&positionDB, id).Error; err != nil {
-				log.Panicln("CheckoutPosition : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoPosition.db.First(&positionDB, id); err != nil {
+				log.Fatalln("CheckoutPosition : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoPosition.CheckoutPhaseOneInstance(&positionDB)
 			backRepo.BackRepoPosition.CheckoutPhaseTwoInstance(backRepo, &positionDB)
@@ -381,6 +370,20 @@ func (backRepo *BackRepoStruct) CheckoutPosition(position *models.Position) {
 
 // CopyBasicFieldsFromPosition
 func (positionDB *PositionDB) CopyBasicFieldsFromPosition(position *models.Position) {
+	// insertion point for fields commit
+
+	positionDB.X_Data.Float64 = position.X
+	positionDB.X_Data.Valid = true
+
+	positionDB.Y_Data.Float64 = position.Y
+	positionDB.Y_Data.Valid = true
+
+	positionDB.Name_Data.String = position.Name
+	positionDB.Name_Data.Valid = true
+}
+
+// CopyBasicFieldsFromPosition_WOP
+func (positionDB *PositionDB) CopyBasicFieldsFromPosition_WOP(position *models.Position_WOP) {
 	// insertion point for fields commit
 
 	positionDB.X_Data.Float64 = position.X
@@ -415,6 +418,14 @@ func (positionDB *PositionDB) CopyBasicFieldsToPosition(position *models.Positio
 	position.Name = positionDB.Name_Data.String
 }
 
+// CopyBasicFieldsToPosition_WOP
+func (positionDB *PositionDB) CopyBasicFieldsToPosition_WOP(position *models.Position_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	position.X = positionDB.X_Data.Float64
+	position.Y = positionDB.Y_Data.Float64
+	position.Name = positionDB.Name_Data.String
+}
+
 // CopyBasicFieldsToPositionWOP
 func (positionDB *PositionDB) CopyBasicFieldsToPositionWOP(position *PositionWOP) {
 	position.ID = int(positionDB.ID)
@@ -432,7 +443,7 @@ func (backRepoPosition *BackRepoPositionStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*PositionDB, 0)
-	for _, positionDB := range *backRepoPosition.Map_PositionDBID_PositionDB {
+	for _, positionDB := range backRepoPosition.Map_PositionDBID_PositionDB {
 		forBackup = append(forBackup, positionDB)
 	}
 
@@ -443,12 +454,12 @@ func (backRepoPosition *BackRepoPositionStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json Position ", filename, " ", err.Error())
+		log.Fatal("Cannot json Position ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json Position file", err.Error())
+		log.Fatal("Cannot write the json Position file", err.Error())
 	}
 }
 
@@ -458,7 +469,7 @@ func (backRepoPosition *BackRepoPositionStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*PositionDB, 0)
-	for _, positionDB := range *backRepoPosition.Map_PositionDBID_PositionDB {
+	for _, positionDB := range backRepoPosition.Map_PositionDBID_PositionDB {
 		forBackup = append(forBackup, positionDB)
 	}
 
@@ -468,7 +479,7 @@ func (backRepoPosition *BackRepoPositionStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("Position")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -493,13 +504,13 @@ func (backRepoPosition *BackRepoPositionStruct) RestoreXLPhaseOne(file *xlsx.Fil
 	sh, ok := file.Sheet["Position"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoPosition.rowVisitorPosition)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -519,11 +530,11 @@ func (backRepoPosition *BackRepoPositionStruct) rowVisitorPosition(row *xlsx.Row
 
 		positionDB_ID_atBackupTime := positionDB.ID
 		positionDB.ID = 0
-		query := backRepoPosition.db.Create(positionDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoPosition.db.Create(positionDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoPosition.Map_PositionDBID_PositionDB)[positionDB.ID] = positionDB
+		backRepoPosition.Map_PositionDBID_PositionDB[positionDB.ID] = positionDB
 		BackRepoPositionid_atBckpTime_newID[positionDB_ID_atBackupTime] = positionDB.ID
 	}
 	return nil
@@ -541,7 +552,7 @@ func (backRepoPosition *BackRepoPositionStruct) RestorePhaseOne(dirPath string) 
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json Position file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json Position file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -556,16 +567,16 @@ func (backRepoPosition *BackRepoPositionStruct) RestorePhaseOne(dirPath string) 
 
 		positionDB_ID_atBackupTime := positionDB.ID
 		positionDB.ID = 0
-		query := backRepoPosition.db.Create(positionDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoPosition.db.Create(positionDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoPosition.Map_PositionDBID_PositionDB)[positionDB.ID] = positionDB
+		backRepoPosition.Map_PositionDBID_PositionDB[positionDB.ID] = positionDB
 		BackRepoPositionid_atBckpTime_newID[positionDB_ID_atBackupTime] = positionDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json Position file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json Position file", err.Error())
 	}
 }
 
@@ -573,19 +584,44 @@ func (backRepoPosition *BackRepoPositionStruct) RestorePhaseOne(dirPath string) 
 // to compute new index
 func (backRepoPosition *BackRepoPositionStruct) RestorePhaseTwo() {
 
-	for _, positionDB := range *backRepoPosition.Map_PositionDBID_PositionDB {
+	for _, positionDB := range backRepoPosition.Map_PositionDBID_PositionDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = positionDB
 
 		// insertion point for reindexing pointers encoding
 		// update databse with new index encoding
-		query := backRepoPosition.db.Model(positionDB).Updates(*positionDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoPosition.db.Model(positionDB)
+		_, err := db.Updates(*positionDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoPosition.ResetReversePointers commits all staged instances of Position to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoPosition *BackRepoPositionStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, position := range backRepoPosition.Map_PositionDBID_PositionPtr {
+		backRepoPosition.ResetReversePointersInstance(backRepo, idx, position)
+	}
+
+	return
+}
+
+func (backRepoPosition *BackRepoPositionStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, position *models.Position) (Error error) {
+
+	// fetch matching positionDB
+	if positionDB, ok := backRepoPosition.Map_PositionDBID_PositionDB[idx]; ok {
+		_ = positionDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongmarkdown/go/db"
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
 
@@ -35,22 +36,17 @@ var dummy_Cell_sort sort.Float64Slice
 type CellAPI struct {
 	gorm.Model
 
-	models.Cell
+	models.Cell_WOP
 
 	// encoding of pointers
-	CellPointersEnconding
+	// for API, it cannot be embedded
+	CellPointersEncoding CellPointersEncoding
 }
 
-// CellPointersEnconding encodes pointers to Struct and
+// CellPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type CellPointersEnconding struct {
+type CellPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
-
-	// Implementation of a reverse ID for field Row{}.Cells []*Cell
-	Row_CellsDBID sql.NullInt64
-
-	// implementation of the index of the withing the slice
-	Row_CellsDBID_Index sql.NullInt64
 }
 
 // CellDB describes a cell in the database
@@ -66,8 +62,10 @@ type CellDB struct {
 
 	// Declation for basic field cellDB.Name
 	Name_Data sql.NullString
+
 	// encoding of pointers
-	CellPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	CellPointersEncoding
 }
 
 // CellDBs arrays cellDBs
@@ -99,56 +97,32 @@ var Cell_Fields = []string{
 
 type BackRepoCellStruct struct {
 	// stores CellDB according to their gorm ID
-	Map_CellDBID_CellDB *map[uint]*CellDB
+	Map_CellDBID_CellDB map[uint]*CellDB
 
 	// stores CellDB ID according to Cell address
-	Map_CellPtr_CellDBID *map[*models.Cell]uint
+	Map_CellPtr_CellDBID map[*models.Cell]uint
 
 	// stores Cell according to their gorm ID
-	Map_CellDBID_CellPtr *map[uint]*models.Cell
+	Map_CellDBID_CellPtr map[uint]*models.Cell
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoCell *BackRepoCellStruct) GetDB() *gorm.DB {
+func (backRepoCell *BackRepoCellStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoCell.stage
+	return
+}
+
+func (backRepoCell *BackRepoCellStruct) GetDB() db.DBInterface {
 	return backRepoCell.db
 }
 
 // GetCellDBFromCellPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoCell *BackRepoCellStruct) GetCellDBFromCellPtr(cell *models.Cell) (cellDB *CellDB) {
-	id := (*backRepoCell.Map_CellPtr_CellDBID)[cell]
-	cellDB = (*backRepoCell.Map_CellDBID_CellDB)[id]
-	return
-}
-
-// BackRepoCell.Init set up the BackRepo of the Cell
-func (backRepoCell *BackRepoCellStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoCell.Map_CellDBID_CellPtr != nil {
-		err := errors.New("In Init, backRepoCell.Map_CellDBID_CellPtr should be nil")
-		return err
-	}
-
-	if backRepoCell.Map_CellDBID_CellDB != nil {
-		err := errors.New("In Init, backRepoCell.Map_CellDBID_CellDB should be nil")
-		return err
-	}
-
-	if backRepoCell.Map_CellPtr_CellDBID != nil {
-		err := errors.New("In Init, backRepoCell.Map_CellPtr_CellDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.Cell, 0)
-	backRepoCell.Map_CellDBID_CellPtr = &tmp
-
-	tmpDB := make(map[uint]*CellDB, 0)
-	backRepoCell.Map_CellDBID_CellDB = &tmpDB
-
-	tmpID := make(map[*models.Cell]uint, 0)
-	backRepoCell.Map_CellPtr_CellDBID = &tmpID
-
-	backRepoCell.db = db
+	id := backRepoCell.Map_CellPtr_CellDBID[cell]
+	cellDB = backRepoCell.Map_CellDBID_CellDB[id]
 	return
 }
 
@@ -162,7 +136,7 @@ func (backRepoCell *BackRepoCellStruct) CommitPhaseOne(stage *models.StageStruct
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, cell := range *backRepoCell.Map_CellDBID_CellPtr {
+	for id, cell := range backRepoCell.Map_CellDBID_CellPtr {
 		if _, ok := stage.Cells[cell]; !ok {
 			backRepoCell.CommitDeleteInstance(id)
 		}
@@ -174,19 +148,20 @@ func (backRepoCell *BackRepoCellStruct) CommitPhaseOne(stage *models.StageStruct
 // BackRepoCell.CommitDeleteInstance commits deletion of Cell to the BackRepo
 func (backRepoCell *BackRepoCellStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	cell := (*backRepoCell.Map_CellDBID_CellPtr)[id]
+	cell := backRepoCell.Map_CellDBID_CellPtr[id]
 
 	// cell is not staged anymore, remove cellDB
-	cellDB := (*backRepoCell.Map_CellDBID_CellDB)[id]
-	query := backRepoCell.db.Unscoped().Delete(&cellDB)
-	if query.Error != nil {
-		return query.Error
+	cellDB := backRepoCell.Map_CellDBID_CellDB[id]
+	db, _ := backRepoCell.db.Unscoped()
+	_, err := db.Delete(cellDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoCell.Map_CellPtr_CellDBID), cell)
-	delete((*backRepoCell.Map_CellDBID_CellPtr), id)
-	delete((*backRepoCell.Map_CellDBID_CellDB), id)
+	delete(backRepoCell.Map_CellPtr_CellDBID, cell)
+	delete(backRepoCell.Map_CellDBID_CellPtr, id)
+	delete(backRepoCell.Map_CellDBID_CellDB, id)
 
 	return
 }
@@ -196,7 +171,7 @@ func (backRepoCell *BackRepoCellStruct) CommitDeleteInstance(id uint) (Error err
 func (backRepoCell *BackRepoCellStruct) CommitPhaseOneInstance(cell *models.Cell) (Error error) {
 
 	// check if the cell is not commited yet
-	if _, ok := (*backRepoCell.Map_CellPtr_CellDBID)[cell]; ok {
+	if _, ok := backRepoCell.Map_CellPtr_CellDBID[cell]; ok {
 		return
 	}
 
@@ -204,15 +179,15 @@ func (backRepoCell *BackRepoCellStruct) CommitPhaseOneInstance(cell *models.Cell
 	var cellDB CellDB
 	cellDB.CopyBasicFieldsFromCell(cell)
 
-	query := backRepoCell.db.Create(&cellDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoCell.db.Create(&cellDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoCell.Map_CellPtr_CellDBID)[cell] = cellDB.ID
-	(*backRepoCell.Map_CellDBID_CellPtr)[cellDB.ID] = cell
-	(*backRepoCell.Map_CellDBID_CellDB)[cellDB.ID] = &cellDB
+	backRepoCell.Map_CellPtr_CellDBID[cell] = cellDB.ID
+	backRepoCell.Map_CellDBID_CellPtr[cellDB.ID] = cell
+	backRepoCell.Map_CellDBID_CellDB[cellDB.ID] = &cellDB
 
 	return
 }
@@ -221,7 +196,7 @@ func (backRepoCell *BackRepoCellStruct) CommitPhaseOneInstance(cell *models.Cell
 // Phase Two is the update of instance with the field in the database
 func (backRepoCell *BackRepoCellStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, cell := range *backRepoCell.Map_CellDBID_CellPtr {
+	for idx, cell := range backRepoCell.Map_CellDBID_CellPtr {
 		backRepoCell.CommitPhaseTwoInstance(backRepo, idx, cell)
 	}
 
@@ -233,14 +208,14 @@ func (backRepoCell *BackRepoCellStruct) CommitPhaseTwo(backRepo *BackRepoStruct)
 func (backRepoCell *BackRepoCellStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, cell *models.Cell) (Error error) {
 
 	// fetch matching cellDB
-	if cellDB, ok := (*backRepoCell.Map_CellDBID_CellDB)[idx]; ok {
+	if cellDB, ok := backRepoCell.Map_CellDBID_CellDB[idx]; ok {
 
 		cellDB.CopyBasicFieldsFromCell(cell)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoCell.db.Save(&cellDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoCell.db.Save(cellDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -255,20 +230,19 @@ func (backRepoCell *BackRepoCellStruct) CommitPhaseTwoInstance(backRepo *BackRep
 // BackRepoCell.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOne() (Error error) {
 
 	cellDBArray := make([]CellDB, 0)
-	query := backRepoCell.db.Find(&cellDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoCell.db.Find(&cellDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	cellInstancesToBeRemovedFromTheStage := make(map[*models.Cell]any)
-	for key, value := range models.Stage.Cells {
+	for key, value := range backRepoCell.stage.Cells {
 		cellInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -278,7 +252,7 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOne() (Error error) {
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		cell, ok := (*backRepoCell.Map_CellDBID_CellPtr)[cellDB.ID]
+		cell, ok := backRepoCell.Map_CellDBID_CellPtr[cellDB.ID]
 		if ok {
 			delete(cellInstancesToBeRemovedFromTheStage, cell)
 		}
@@ -286,13 +260,13 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOne() (Error error) {
 
 	// remove from stage and back repo's 3 maps all cells that are not in the checkout
 	for cell := range cellInstancesToBeRemovedFromTheStage {
-		cell.Unstage()
+		cell.Unstage(backRepoCell.GetStage())
 
 		// remove instance from the back repo 3 maps
-		cellID := (*backRepoCell.Map_CellPtr_CellDBID)[cell]
-		delete((*backRepoCell.Map_CellPtr_CellDBID), cell)
-		delete((*backRepoCell.Map_CellDBID_CellDB), cellID)
-		delete((*backRepoCell.Map_CellDBID_CellPtr), cellID)
+		cellID := backRepoCell.Map_CellPtr_CellDBID[cell]
+		delete(backRepoCell.Map_CellPtr_CellDBID, cell)
+		delete(backRepoCell.Map_CellDBID_CellDB, cellID)
+		delete(backRepoCell.Map_CellDBID_CellPtr, cellID)
 	}
 
 	return
@@ -302,24 +276,27 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOne() (Error error) {
 // models version of the cellDB
 func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOneInstance(cellDB *CellDB) (Error error) {
 
-	cell, ok := (*backRepoCell.Map_CellDBID_CellPtr)[cellDB.ID]
+	cell, ok := backRepoCell.Map_CellDBID_CellPtr[cellDB.ID]
 	if !ok {
 		cell = new(models.Cell)
 
-		(*backRepoCell.Map_CellDBID_CellPtr)[cellDB.ID] = cell
-		(*backRepoCell.Map_CellPtr_CellDBID)[cell] = cellDB.ID
+		backRepoCell.Map_CellDBID_CellPtr[cellDB.ID] = cell
+		backRepoCell.Map_CellPtr_CellDBID[cell] = cellDB.ID
 
 		// append model store with the new element
 		cell.Name = cellDB.Name_Data.String
-		cell.Stage()
+		cell.Stage(backRepoCell.GetStage())
 	}
 	cellDB.CopyBasicFieldsToCell(cell)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	cell.Stage(backRepoCell.GetStage())
 
 	// preserve pointer to cellDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_CellDBID_CellDB)[cellDB hold variable pointers
 	cellDB_Data := *cellDB
 	preservedPtrToCell := &cellDB_Data
-	(*backRepoCell.Map_CellDBID_CellDB)[cellDB.ID] = preservedPtrToCell
+	backRepoCell.Map_CellDBID_CellDB[cellDB.ID] = preservedPtrToCell
 
 	return
 }
@@ -329,7 +306,7 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseOneInstance(cellDB *CellDB)
 func (backRepoCell *BackRepoCellStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, cellDB := range *backRepoCell.Map_CellDBID_CellDB {
+	for _, cellDB := range backRepoCell.Map_CellDBID_CellDB {
 		backRepoCell.CheckoutPhaseTwoInstance(backRepo, cellDB)
 	}
 	return
@@ -339,8 +316,14 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseTwo(backRepo *BackRepoStruc
 // Phase Two is the update of instance with the field in the database
 func (backRepoCell *BackRepoCellStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, cellDB *CellDB) (Error error) {
 
-	cell := (*backRepoCell.Map_CellDBID_CellPtr)[cellDB.ID]
-	_ = cell // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	cell := backRepoCell.Map_CellDBID_CellPtr[cellDB.ID]
+
+	cellDB.DecodePointers(backRepo, cell)
+
+	return
+}
+
+func (cellDB *CellDB) DecodePointers(backRepo *BackRepoStruct, cell *models.Cell) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -349,7 +332,7 @@ func (backRepoCell *BackRepoCellStruct) CheckoutPhaseTwoInstance(backRepo *BackR
 // CommitCell allows commit of a single cell (if already staged)
 func (backRepo *BackRepoStruct) CommitCell(cell *models.Cell) {
 	backRepo.BackRepoCell.CommitPhaseOneInstance(cell)
-	if id, ok := (*backRepo.BackRepoCell.Map_CellPtr_CellDBID)[cell]; ok {
+	if id, ok := backRepo.BackRepoCell.Map_CellPtr_CellDBID[cell]; ok {
 		backRepo.BackRepoCell.CommitPhaseTwoInstance(backRepo, id, cell)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -358,14 +341,14 @@ func (backRepo *BackRepoStruct) CommitCell(cell *models.Cell) {
 // CommitCell allows checkout of a single cell (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutCell(cell *models.Cell) {
 	// check if the cell is staged
-	if _, ok := (*backRepo.BackRepoCell.Map_CellPtr_CellDBID)[cell]; ok {
+	if _, ok := backRepo.BackRepoCell.Map_CellPtr_CellDBID[cell]; ok {
 
-		if id, ok := (*backRepo.BackRepoCell.Map_CellPtr_CellDBID)[cell]; ok {
+		if id, ok := backRepo.BackRepoCell.Map_CellPtr_CellDBID[cell]; ok {
 			var cellDB CellDB
 			cellDB.ID = id
 
-			if err := backRepo.BackRepoCell.db.First(&cellDB, id).Error; err != nil {
-				log.Panicln("CheckoutCell : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoCell.db.First(&cellDB, id); err != nil {
+				log.Fatalln("CheckoutCell : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoCell.CheckoutPhaseOneInstance(&cellDB)
 			backRepo.BackRepoCell.CheckoutPhaseTwoInstance(backRepo, &cellDB)
@@ -375,6 +358,14 @@ func (backRepo *BackRepoStruct) CheckoutCell(cell *models.Cell) {
 
 // CopyBasicFieldsFromCell
 func (cellDB *CellDB) CopyBasicFieldsFromCell(cell *models.Cell) {
+	// insertion point for fields commit
+
+	cellDB.Name_Data.String = cell.Name
+	cellDB.Name_Data.Valid = true
+}
+
+// CopyBasicFieldsFromCell_WOP
+func (cellDB *CellDB) CopyBasicFieldsFromCell_WOP(cell *models.Cell_WOP) {
 	// insertion point for fields commit
 
 	cellDB.Name_Data.String = cell.Name
@@ -395,6 +386,12 @@ func (cellDB *CellDB) CopyBasicFieldsToCell(cell *models.Cell) {
 	cell.Name = cellDB.Name_Data.String
 }
 
+// CopyBasicFieldsToCell_WOP
+func (cellDB *CellDB) CopyBasicFieldsToCell_WOP(cell *models.Cell_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	cell.Name = cellDB.Name_Data.String
+}
+
 // CopyBasicFieldsToCellWOP
 func (cellDB *CellDB) CopyBasicFieldsToCellWOP(cell *CellWOP) {
 	cell.ID = int(cellDB.ID)
@@ -410,7 +407,7 @@ func (backRepoCell *BackRepoCellStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*CellDB, 0)
-	for _, cellDB := range *backRepoCell.Map_CellDBID_CellDB {
+	for _, cellDB := range backRepoCell.Map_CellDBID_CellDB {
 		forBackup = append(forBackup, cellDB)
 	}
 
@@ -421,12 +418,12 @@ func (backRepoCell *BackRepoCellStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json Cell ", filename, " ", err.Error())
+		log.Fatal("Cannot json Cell ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json Cell file", err.Error())
+		log.Fatal("Cannot write the json Cell file", err.Error())
 	}
 }
 
@@ -436,7 +433,7 @@ func (backRepoCell *BackRepoCellStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*CellDB, 0)
-	for _, cellDB := range *backRepoCell.Map_CellDBID_CellDB {
+	for _, cellDB := range backRepoCell.Map_CellDBID_CellDB {
 		forBackup = append(forBackup, cellDB)
 	}
 
@@ -446,7 +443,7 @@ func (backRepoCell *BackRepoCellStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("Cell")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -471,13 +468,13 @@ func (backRepoCell *BackRepoCellStruct) RestoreXLPhaseOne(file *xlsx.File) {
 	sh, ok := file.Sheet["Cell"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoCell.rowVisitorCell)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -497,11 +494,11 @@ func (backRepoCell *BackRepoCellStruct) rowVisitorCell(row *xlsx.Row) error {
 
 		cellDB_ID_atBackupTime := cellDB.ID
 		cellDB.ID = 0
-		query := backRepoCell.db.Create(cellDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoCell.db.Create(cellDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoCell.Map_CellDBID_CellDB)[cellDB.ID] = cellDB
+		backRepoCell.Map_CellDBID_CellDB[cellDB.ID] = cellDB
 		BackRepoCellid_atBckpTime_newID[cellDB_ID_atBackupTime] = cellDB.ID
 	}
 	return nil
@@ -519,7 +516,7 @@ func (backRepoCell *BackRepoCellStruct) RestorePhaseOne(dirPath string) {
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json Cell file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json Cell file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -534,16 +531,16 @@ func (backRepoCell *BackRepoCellStruct) RestorePhaseOne(dirPath string) {
 
 		cellDB_ID_atBackupTime := cellDB.ID
 		cellDB.ID = 0
-		query := backRepoCell.db.Create(cellDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoCell.db.Create(cellDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoCell.Map_CellDBID_CellDB)[cellDB.ID] = cellDB
+		backRepoCell.Map_CellDBID_CellDB[cellDB.ID] = cellDB
 		BackRepoCellid_atBckpTime_newID[cellDB_ID_atBackupTime] = cellDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json Cell file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json Cell file", err.Error())
 	}
 }
 
@@ -551,25 +548,44 @@ func (backRepoCell *BackRepoCellStruct) RestorePhaseOne(dirPath string) {
 // to compute new index
 func (backRepoCell *BackRepoCellStruct) RestorePhaseTwo() {
 
-	for _, cellDB := range *backRepoCell.Map_CellDBID_CellDB {
+	for _, cellDB := range backRepoCell.Map_CellDBID_CellDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = cellDB
 
 		// insertion point for reindexing pointers encoding
-		// This reindex cell.Cells
-		if cellDB.Row_CellsDBID.Int64 != 0 {
-			cellDB.Row_CellsDBID.Int64 =
-				int64(BackRepoRowid_atBckpTime_newID[uint(cellDB.Row_CellsDBID.Int64)])
-		}
-
 		// update databse with new index encoding
-		query := backRepoCell.db.Model(cellDB).Updates(*cellDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoCell.db.Model(cellDB)
+		_, err := db.Updates(*cellDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoCell.ResetReversePointers commits all staged instances of Cell to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoCell *BackRepoCellStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, cell := range backRepoCell.Map_CellDBID_CellPtr {
+		backRepoCell.ResetReversePointersInstance(backRepo, idx, cell)
+	}
+
+	return
+}
+
+func (backRepoCell *BackRepoCellStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, cell *models.Cell) (Error error) {
+
+	// fetch matching cellDB
+	if cellDB, ok := backRepoCell.Map_CellDBID_CellDB[idx]; ok {
+		_ = cellDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

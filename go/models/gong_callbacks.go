@@ -1,3 +1,4 @@
+// generated code - do not edit
 package models
 
 // AfterCreateFromFront is called after a create from front
@@ -29,6 +30,8 @@ func AfterCreateFromFront[Type Gongstruct](stage *StageStruct, instance *Type) {
 		if stage.OnAfterRowCreateCallback != nil {
 			stage.OnAfterRowCreateCallback.OnAfterCreate(stage, target)
 		}
+	default:
+		_ = target
 	}
 }
 
@@ -67,6 +70,8 @@ func AfterUpdateFromFront[Type Gongstruct](stage *StageStruct, old, new *Type) {
 		if stage.OnAfterRowUpdateCallback != nil {
 			stage.OnAfterRowUpdateCallback.OnAfterUpdate(stage, oldTarget, newTarget)
 		}
+	default:
+		_ = oldTarget
 	}
 }
 
@@ -105,6 +110,8 @@ func AfterDeleteFromFront[Type Gongstruct](stage *StageStruct, staged, front *Ty
 			staged := any(staged).(*Row)
 			stage.OnAfterRowDeleteCallback.OnAfterDelete(stage, staged, front)
 		}
+	default:
+		_ = front
 	}
 }
 
@@ -137,6 +144,8 @@ func AfterReadFromFront[Type Gongstruct](stage *StageStruct, instance *Type) {
 		if stage.OnAfterRowReadCallback != nil {
 			stage.OnAfterRowReadCallback.OnAfterRead(stage, target)
 		}
+	default:
+		_ = target
 	}
 }
 

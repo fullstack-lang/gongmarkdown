@@ -230,7 +230,6 @@ func (styles *xlsxStyleSheet) reset() {
 	styles.numFmtRefTableMU.Unlock()
 }
 
-//
 func (styles *xlsxStyleSheet) populateStyleFromXf(style *Style, xf xlsxXf) {
 	style.ApplyBorder = xf.ApplyBorder
 	style.ApplyFill = xf.ApplyFill
@@ -238,16 +237,15 @@ func (styles *xlsxStyleSheet) populateStyleFromXf(style *Style, xf xlsxXf) {
 	style.ApplyAlignment = xf.ApplyAlignment
 
 	if xf.BorderId > -1 && xf.BorderId < styles.Borders.Count {
-		var border xlsxBorder
-		border = styles.Borders.Border[xf.BorderId]
+		border := styles.Borders.Border[xf.BorderId]
 		style.Border.Left = border.Left.Style
-		style.Border.LeftColor = border.Left.Color.RGB
+		style.Border.LeftColor = styles.argbValue(border.Left.Color)
 		style.Border.Right = border.Right.Style
-		style.Border.RightColor = border.Right.Color.RGB
+		style.Border.RightColor = styles.argbValue(border.Right.Color)
 		style.Border.Top = border.Top.Style
-		style.Border.TopColor = border.Top.Color.RGB
+		style.Border.TopColor = styles.argbValue(border.Top.Color)
 		style.Border.Bottom = border.Bottom.Style
-		style.Border.BottomColor = border.Bottom.Color.RGB
+		style.Border.BottomColor = styles.argbValue(border.Bottom.Color)
 	}
 
 	if xf.FillId > -1 && xf.FillId < styles.Fills.Count {
@@ -502,7 +500,7 @@ func (styles *xlsxStyleSheet) newNumFmt(formatCode string) xlsxNumFmt {
 // addNumFmt add xlsxNumFmt if its not exist.
 func (styles *xlsxStyleSheet) addNumFmt(xNumFmt xlsxNumFmt) {
 	// don't add built in NumFmt
-	if xNumFmt.NumFmtId <= builtinNumFmtsCount {
+	if _, ok := builtInNumFmt[xNumFmt.NumFmtId]; ok {
 		return
 	}
 	styles.numFmtRefTableMU.RLock()
@@ -639,7 +637,6 @@ type xlsxFonts struct {
 	Font  []xlsxFont `xml:"font,omitempty"`
 }
 
-//
 func (fonts *xlsxFonts) addFont(font xlsxFont) {
 	fonts.Font = append(fonts.Font, font)
 	fonts.Count++
@@ -758,7 +755,6 @@ type xlsxFills struct {
 	Fill  []xlsxFill `xml:"fill,omitempty"`
 }
 
-//
 func (fills *xlsxFills) addFill(fill xlsxFill) {
 	fills.Fill = append(fills.Fill, fill)
 	fills.Count++
@@ -874,7 +870,6 @@ type xlsxBorders struct {
 	Border []xlsxBorder `xml:"border"`
 }
 
-//
 func (borders *xlsxBorders) addBorder(border xlsxBorder) {
 	borders.Border = append(borders.Border, border)
 	borders.Count++
@@ -919,7 +914,6 @@ func (border *xlsxBorder) Equals(other xlsxBorder) bool {
 	return border.Left.Equals(other.Left) && border.Right.Equals(other.Right) && border.Top.Equals(other.Top) && border.Bottom.Equals(other.Bottom)
 }
 
-//
 func (border *xlsxBorder) marshalBorderLine(line xlsxLine, name string) string {
 	if line.Style == "" {
 		return fmt.Sprintf("<%s/>", name)
@@ -1012,7 +1006,6 @@ type xlsxCellStyleXfs struct {
 	Xf    []xlsxXf `xml:"xf,omitempty"`
 }
 
-//
 func (cellStyleXfs *xlsxCellStyleXfs) addXf(Xf xlsxXf) {
 	cellStyleXfs.Xf = append(cellStyleXfs.Xf, Xf)
 	cellStyleXfs.Count++
@@ -1156,13 +1149,21 @@ type xlsxColors struct {
 	MruColors     []xlsxColor    `xml:"mruColors>color,omitempty"`
 }
 
+// indexerdColor returns ARGB color string for the given index of the IndexedColors.
+// Indexes start from 0, see section 18.8.27 of ECMA-376 (part 1, 4th edition).
 func (c *xlsxColors) indexedColor(index int) string {
-	if c.IndexedColors != nil {
-		return c.IndexedColors[index-1].Rgb
-	} else {
-	    	if index < 1 || index > 64 {
-	 		return ""
-	    	}
-		return xlsxIndexedColors[index-1]
+	if index < 0 {
+		return ""
 	}
+
+	if c.IndexedColors != nil && index < len(c.IndexedColors) {
+		return c.IndexedColors[index].Rgb
+	}
+
+	// This is a weird fallback? Why would we be using indexed colours
+	// in a file that hasn't defined any?
+	if index < len(xlsxIndexedColors) {
+		return xlsxIndexedColors[index]
+	}
+	return ""
 }

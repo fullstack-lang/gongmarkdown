@@ -4,19 +4,25 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
+
+var caserEnglish = cases.Title(language.English)
 
 // VerySimpleCodeGenerator generates from elements of mdlPkg the file generatedFilePath with templateCode
 func VerySimpleCodeGenerator(
-	mdlPkg *ModelPkg,
-	pkgName string,
-	pkgGoPath string,
+	modelPkg *ModelPkg,
 	generatedFilePath string,
 	templateCode string) {
-	SimpleCodeGenerator(mdlPkg, pkgName, pkgGoPath, generatedFilePath, templateCode, map[string]string{})
+
+	pkgName := caserEnglish.String(modelPkg.Name)
+	pkgGoPath := modelPkg.PkgPath
+
+	SimpleCodeGenerator(modelPkg, pkgName, pkgGoPath, generatedFilePath, templateCode, map[string]string{})
 }
 
 func VerySimpleCodeGeneratorForGongStructWithNameField(
@@ -39,6 +45,7 @@ func SimpleCodeGenerator(
 	subTemplateCode map[string]string) {
 	CodeGenerator(mdlPkg, pkgName, pkgGoPath, generatedFilePath, templateCode, subTemplateCode,
 		map[string]string{}, map[string]string{},
+		false,
 		false)
 }
 
@@ -53,7 +60,8 @@ func SimpleCodeGeneratorForGongStructWithNameField(
 	subTemplateCode map[string]string) {
 	CodeGenerator(mdlPkg, pkgName, pkgGoPath, generatedFilePath, templateCode, subTemplateCode,
 		map[string]string{}, map[string]string{},
-		true)
+		true,
+		false)
 }
 
 // SimpleCodeGenerator generates from elements of mdlPkg the file generatedFilePath with templateCode and
@@ -69,7 +77,8 @@ func CodeGenerator(
 	subSubTemplateCode map[string]string,
 	// a sub sub template is generated within a sub template
 	subSubToSubMap map[string]string,
-	forGongStructWithNameFieldOnly bool) {
+	forGongStructWithNameFieldOnly bool,
+	forGongStructWithHasOnUpdateSignatureOnly bool) {
 
 	file, err := os.Create(generatedFilePath)
 
@@ -92,6 +101,13 @@ func CodeGenerator(
 	structList := []*GongStruct{}
 	for _, _struct := range mdlPkg.GongStructs {
 		if forGongStructWithNameFieldOnly && !_struct.HasNameField() {
+			continue
+		}
+		if forGongStructWithHasOnUpdateSignatureOnly &&
+			!_struct.HasOnAfterUpdateSignature {
+			continue
+		}
+		if strings.HasSuffix(generatedFilePath, ".ts") && _struct.IsIgnoredForFront {
 			continue
 		}
 		structList = append(structList, _struct)
@@ -132,9 +148,12 @@ func CodeGenerator(
 
 		// compute code from sub template
 		for subTemplate := range subTemplateCode {
-			subCodes[subTemplate] += Replace2(subTemplateCode[subTemplate],
+			subCodes[subTemplate] += Replace3(subTemplateCode[subTemplate],
 				"{{Structname}}", _struct.Name,
-				"{{structname}}", structName)
+				"{{structname}}", structName,
+				"	 | ", "	", // for the replacement of the of the first bar in the Gongstruct Type def
+
+			)
 
 			// apply sub sub templates
 			for subSubTemplate := range subSubTemplateCode {
@@ -157,6 +176,7 @@ func CodeGenerator(
 	code = strings.ReplaceAll(code, "{{pkgname}}", strings.ToLower(pkgName))
 	code = strings.ReplaceAll(code, "{{PkgPathRoot}}", strings.ReplaceAll(pkgGoPath, "/models", ""))
 	code = strings.ReplaceAll(code, "{{PkgPathAboveRoot}}", strings.ReplaceAll(pkgGoPath, "/go/models", ""))
+	code = strings.ReplaceAll(code, "{{NgWorkspaceName}}", mdlPkg.NgWorkspaceName)
 
 	pkgPathRootWithoutSlashes := strings.ReplaceAll(pkgGoPath, "/models", "")
 	pkgPathRootWithoutSlashes = strings.ReplaceAll(pkgPathRootWithoutSlashes, "/", "_")
@@ -256,38 +276,4 @@ func MultiCodeGenerator(
 		defer file.Close()
 		fmt.Fprint(file, code)
 	}
-}
-
-// RemoveGeneratedGongFiles generates the setup file for the gorm
-func RemoveGeneratedGongFiles(
-	RelativePkgPath string) {
-
-	{
-		// relative to the models package, swith to ./controlers package
-		filename := filepath.Join(RelativePkgPath, "gong.go")
-
-		// we should use go generate
-		log.Println("removing file : " + filename)
-
-		if err := os.Remove(filename); err != nil {
-			if os.IsExist(err) {
-				log.Fatalf("Unable to remove %s", filename)
-			}
-		}
-	}
-
-	{
-		// relative to the models package, swith to ./controlers package
-		filename := filepath.Join(RelativePkgPath, "gong_coder.go")
-
-		// we should use go generate
-		log.Println("removing file : " + filename)
-
-		if err := os.Remove(filename); err != nil {
-			if os.IsExist(err) {
-				log.Fatalf("Unable to remove %s", filename)
-			}
-		}
-	}
-
 }

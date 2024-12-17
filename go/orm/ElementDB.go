@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongmarkdown/go/db"
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
 
@@ -35,22 +36,23 @@ var dummy_Element_sort sort.Float64Slice
 type ElementAPI struct {
 	gorm.Model
 
-	models.Element
+	models.Element_WOP
 
 	// encoding of pointers
-	ElementPointersEnconding
+	// for API, it cannot be embedded
+	ElementPointersEncoding ElementPointersEncoding
 }
 
-// ElementPointersEnconding encodes pointers to Struct and
+// ElementPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type ElementPointersEnconding struct {
+type ElementPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
 
-	// Implementation of a reverse ID for field Element{}.SubElements []*Element
-	Element_SubElementsDBID sql.NullInt64
+	// field SubElements is a slice of pointers to another Struct (optional or 0..1)
+	SubElements IntSlice `gorm:"type:TEXT"`
 
-	// implementation of the index of the withing the slice
-	Element_SubElementsDBID_Index sql.NullInt64
+	// field Rows is a slice of pointers to another Struct (optional or 0..1)
+	Rows IntSlice `gorm:"type:TEXT"`
 }
 
 // ElementDB describes a element in the database
@@ -72,8 +74,10 @@ type ElementDB struct {
 
 	// Declation for basic field elementDB.Type
 	Type_Data sql.NullString
+
 	// encoding of pointers
-	ElementPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	ElementPointersEncoding
 }
 
 // ElementDBs arrays elementDBs
@@ -111,56 +115,32 @@ var Element_Fields = []string{
 
 type BackRepoElementStruct struct {
 	// stores ElementDB according to their gorm ID
-	Map_ElementDBID_ElementDB *map[uint]*ElementDB
+	Map_ElementDBID_ElementDB map[uint]*ElementDB
 
 	// stores ElementDB ID according to Element address
-	Map_ElementPtr_ElementDBID *map[*models.Element]uint
+	Map_ElementPtr_ElementDBID map[*models.Element]uint
 
 	// stores Element according to their gorm ID
-	Map_ElementDBID_ElementPtr *map[uint]*models.Element
+	Map_ElementDBID_ElementPtr map[uint]*models.Element
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoElement *BackRepoElementStruct) GetDB() *gorm.DB {
+func (backRepoElement *BackRepoElementStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoElement.stage
+	return
+}
+
+func (backRepoElement *BackRepoElementStruct) GetDB() db.DBInterface {
 	return backRepoElement.db
 }
 
 // GetElementDBFromElementPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoElement *BackRepoElementStruct) GetElementDBFromElementPtr(element *models.Element) (elementDB *ElementDB) {
-	id := (*backRepoElement.Map_ElementPtr_ElementDBID)[element]
-	elementDB = (*backRepoElement.Map_ElementDBID_ElementDB)[id]
-	return
-}
-
-// BackRepoElement.Init set up the BackRepo of the Element
-func (backRepoElement *BackRepoElementStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoElement.Map_ElementDBID_ElementPtr != nil {
-		err := errors.New("In Init, backRepoElement.Map_ElementDBID_ElementPtr should be nil")
-		return err
-	}
-
-	if backRepoElement.Map_ElementDBID_ElementDB != nil {
-		err := errors.New("In Init, backRepoElement.Map_ElementDBID_ElementDB should be nil")
-		return err
-	}
-
-	if backRepoElement.Map_ElementPtr_ElementDBID != nil {
-		err := errors.New("In Init, backRepoElement.Map_ElementPtr_ElementDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.Element, 0)
-	backRepoElement.Map_ElementDBID_ElementPtr = &tmp
-
-	tmpDB := make(map[uint]*ElementDB, 0)
-	backRepoElement.Map_ElementDBID_ElementDB = &tmpDB
-
-	tmpID := make(map[*models.Element]uint, 0)
-	backRepoElement.Map_ElementPtr_ElementDBID = &tmpID
-
-	backRepoElement.db = db
+	id := backRepoElement.Map_ElementPtr_ElementDBID[element]
+	elementDB = backRepoElement.Map_ElementDBID_ElementDB[id]
 	return
 }
 
@@ -174,7 +154,7 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseOne(stage *models.Stage
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, element := range *backRepoElement.Map_ElementDBID_ElementPtr {
+	for id, element := range backRepoElement.Map_ElementDBID_ElementPtr {
 		if _, ok := stage.Elements[element]; !ok {
 			backRepoElement.CommitDeleteInstance(id)
 		}
@@ -186,19 +166,20 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseOne(stage *models.Stage
 // BackRepoElement.CommitDeleteInstance commits deletion of Element to the BackRepo
 func (backRepoElement *BackRepoElementStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	element := (*backRepoElement.Map_ElementDBID_ElementPtr)[id]
+	element := backRepoElement.Map_ElementDBID_ElementPtr[id]
 
 	// element is not staged anymore, remove elementDB
-	elementDB := (*backRepoElement.Map_ElementDBID_ElementDB)[id]
-	query := backRepoElement.db.Unscoped().Delete(&elementDB)
-	if query.Error != nil {
-		return query.Error
+	elementDB := backRepoElement.Map_ElementDBID_ElementDB[id]
+	db, _ := backRepoElement.db.Unscoped()
+	_, err := db.Delete(elementDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoElement.Map_ElementPtr_ElementDBID), element)
-	delete((*backRepoElement.Map_ElementDBID_ElementPtr), id)
-	delete((*backRepoElement.Map_ElementDBID_ElementDB), id)
+	delete(backRepoElement.Map_ElementPtr_ElementDBID, element)
+	delete(backRepoElement.Map_ElementDBID_ElementPtr, id)
+	delete(backRepoElement.Map_ElementDBID_ElementDB, id)
 
 	return
 }
@@ -208,7 +189,7 @@ func (backRepoElement *BackRepoElementStruct) CommitDeleteInstance(id uint) (Err
 func (backRepoElement *BackRepoElementStruct) CommitPhaseOneInstance(element *models.Element) (Error error) {
 
 	// check if the element is not commited yet
-	if _, ok := (*backRepoElement.Map_ElementPtr_ElementDBID)[element]; ok {
+	if _, ok := backRepoElement.Map_ElementPtr_ElementDBID[element]; ok {
 		return
 	}
 
@@ -216,15 +197,15 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseOneInstance(element *mo
 	var elementDB ElementDB
 	elementDB.CopyBasicFieldsFromElement(element)
 
-	query := backRepoElement.db.Create(&elementDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoElement.db.Create(&elementDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoElement.Map_ElementPtr_ElementDBID)[element] = elementDB.ID
-	(*backRepoElement.Map_ElementDBID_ElementPtr)[elementDB.ID] = element
-	(*backRepoElement.Map_ElementDBID_ElementDB)[elementDB.ID] = &elementDB
+	backRepoElement.Map_ElementPtr_ElementDBID[element] = elementDB.ID
+	backRepoElement.Map_ElementDBID_ElementPtr[elementDB.ID] = element
+	backRepoElement.Map_ElementDBID_ElementDB[elementDB.ID] = &elementDB
 
 	return
 }
@@ -233,7 +214,7 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseOneInstance(element *mo
 // Phase Two is the update of instance with the field in the database
 func (backRepoElement *BackRepoElementStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, element := range *backRepoElement.Map_ElementDBID_ElementPtr {
+	for idx, element := range backRepoElement.Map_ElementDBID_ElementPtr {
 		backRepoElement.CommitPhaseTwoInstance(backRepo, idx, element)
 	}
 
@@ -245,52 +226,50 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseTwo(backRepo *BackRepoS
 func (backRepoElement *BackRepoElementStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, element *models.Element) (Error error) {
 
 	// fetch matching elementDB
-	if elementDB, ok := (*backRepoElement.Map_ElementDBID_ElementDB)[idx]; ok {
+	if elementDB, ok := backRepoElement.Map_ElementDBID_ElementDB[idx]; ok {
 
 		elementDB.CopyBasicFieldsFromElement(element)
 
 		// insertion point for translating pointers encodings into actual pointers
-		// This loop encodes the slice of pointers element.SubElements into the back repo.
-		// Each back repo instance at the end of the association encode the ID of the association start
-		// into a dedicated field for coding the association. The back repo instance is then saved to the db
-		for idx, elementAssocEnd := range element.SubElements {
-
-			// get the back repo instance at the association end
+		// 1. reset
+		elementDB.ElementPointersEncoding.SubElements = make([]int, 0)
+		// 2. encode
+		for _, elementAssocEnd := range element.SubElements {
 			elementAssocEnd_DB :=
 				backRepo.BackRepoElement.GetElementDBFromElementPtr(elementAssocEnd)
-
-			// encode reverse pointer in the association end back repo instance
-			elementAssocEnd_DB.Element_SubElementsDBID.Int64 = int64(elementDB.ID)
-			elementAssocEnd_DB.Element_SubElementsDBID.Valid = true
-			elementAssocEnd_DB.Element_SubElementsDBID_Index.Int64 = int64(idx)
-			elementAssocEnd_DB.Element_SubElementsDBID_Index.Valid = true
-			if q := backRepoElement.db.Save(elementAssocEnd_DB); q.Error != nil {
-				return q.Error
+			
+			// the stage might be inconsistant, meaning that the elementAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if elementAssocEnd_DB == nil {
+				continue
 			}
+			
+			elementDB.ElementPointersEncoding.SubElements =
+				append(elementDB.ElementPointersEncoding.SubElements, int(elementAssocEnd_DB.ID))
 		}
 
-		// This loop encodes the slice of pointers element.Rows into the back repo.
-		// Each back repo instance at the end of the association encode the ID of the association start
-		// into a dedicated field for coding the association. The back repo instance is then saved to the db
-		for idx, rowAssocEnd := range element.Rows {
-
-			// get the back repo instance at the association end
+		// 1. reset
+		elementDB.ElementPointersEncoding.Rows = make([]int, 0)
+		// 2. encode
+		for _, rowAssocEnd := range element.Rows {
 			rowAssocEnd_DB :=
 				backRepo.BackRepoRow.GetRowDBFromRowPtr(rowAssocEnd)
-
-			// encode reverse pointer in the association end back repo instance
-			rowAssocEnd_DB.Element_RowsDBID.Int64 = int64(elementDB.ID)
-			rowAssocEnd_DB.Element_RowsDBID.Valid = true
-			rowAssocEnd_DB.Element_RowsDBID_Index.Int64 = int64(idx)
-			rowAssocEnd_DB.Element_RowsDBID_Index.Valid = true
-			if q := backRepoElement.db.Save(rowAssocEnd_DB); q.Error != nil {
-				return q.Error
+			
+			// the stage might be inconsistant, meaning that the rowAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if rowAssocEnd_DB == nil {
+				continue
 			}
+			
+			elementDB.ElementPointersEncoding.Rows =
+				append(elementDB.ElementPointersEncoding.Rows, int(rowAssocEnd_DB.ID))
 		}
 
-		query := backRepoElement.db.Save(&elementDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoElement.db.Save(elementDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -305,20 +284,19 @@ func (backRepoElement *BackRepoElementStruct) CommitPhaseTwoInstance(backRepo *B
 // BackRepoElement.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoElement *BackRepoElementStruct) CheckoutPhaseOne() (Error error) {
 
 	elementDBArray := make([]ElementDB, 0)
-	query := backRepoElement.db.Find(&elementDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoElement.db.Find(&elementDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	elementInstancesToBeRemovedFromTheStage := make(map[*models.Element]any)
-	for key, value := range models.Stage.Elements {
+	for key, value := range backRepoElement.stage.Elements {
 		elementInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -328,7 +306,7 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseOne() (Error error) {
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		element, ok := (*backRepoElement.Map_ElementDBID_ElementPtr)[elementDB.ID]
+		element, ok := backRepoElement.Map_ElementDBID_ElementPtr[elementDB.ID]
 		if ok {
 			delete(elementInstancesToBeRemovedFromTheStage, element)
 		}
@@ -336,13 +314,13 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseOne() (Error error) {
 
 	// remove from stage and back repo's 3 maps all elements that are not in the checkout
 	for element := range elementInstancesToBeRemovedFromTheStage {
-		element.Unstage()
+		element.Unstage(backRepoElement.GetStage())
 
 		// remove instance from the back repo 3 maps
-		elementID := (*backRepoElement.Map_ElementPtr_ElementDBID)[element]
-		delete((*backRepoElement.Map_ElementPtr_ElementDBID), element)
-		delete((*backRepoElement.Map_ElementDBID_ElementDB), elementID)
-		delete((*backRepoElement.Map_ElementDBID_ElementPtr), elementID)
+		elementID := backRepoElement.Map_ElementPtr_ElementDBID[element]
+		delete(backRepoElement.Map_ElementPtr_ElementDBID, element)
+		delete(backRepoElement.Map_ElementDBID_ElementDB, elementID)
+		delete(backRepoElement.Map_ElementDBID_ElementPtr, elementID)
 	}
 
 	return
@@ -352,24 +330,27 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseOne() (Error error) {
 // models version of the elementDB
 func (backRepoElement *BackRepoElementStruct) CheckoutPhaseOneInstance(elementDB *ElementDB) (Error error) {
 
-	element, ok := (*backRepoElement.Map_ElementDBID_ElementPtr)[elementDB.ID]
+	element, ok := backRepoElement.Map_ElementDBID_ElementPtr[elementDB.ID]
 	if !ok {
 		element = new(models.Element)
 
-		(*backRepoElement.Map_ElementDBID_ElementPtr)[elementDB.ID] = element
-		(*backRepoElement.Map_ElementPtr_ElementDBID)[element] = elementDB.ID
+		backRepoElement.Map_ElementDBID_ElementPtr[elementDB.ID] = element
+		backRepoElement.Map_ElementPtr_ElementDBID[element] = elementDB.ID
 
 		// append model store with the new element
 		element.Name = elementDB.Name_Data.String
-		element.Stage()
+		element.Stage(backRepoElement.GetStage())
 	}
 	elementDB.CopyBasicFieldsToElement(element)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	element.Stage(backRepoElement.GetStage())
 
 	// preserve pointer to elementDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_ElementDBID_ElementDB)[elementDB hold variable pointers
 	elementDB_Data := *elementDB
 	preservedPtrToElement := &elementDB_Data
-	(*backRepoElement.Map_ElementDBID_ElementDB)[elementDB.ID] = preservedPtrToElement
+	backRepoElement.Map_ElementDBID_ElementDB[elementDB.ID] = preservedPtrToElement
 
 	return
 }
@@ -379,7 +360,7 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseOneInstance(elementDB
 func (backRepoElement *BackRepoElementStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, elementDB := range *backRepoElement.Map_ElementDBID_ElementDB {
+	for _, elementDB := range backRepoElement.Map_ElementDBID_ElementDB {
 		backRepoElement.CheckoutPhaseTwoInstance(backRepo, elementDB)
 	}
 	return
@@ -389,8 +370,14 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseTwo(backRepo *BackRep
 // Phase Two is the update of instance with the field in the database
 func (backRepoElement *BackRepoElementStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, elementDB *ElementDB) (Error error) {
 
-	element := (*backRepoElement.Map_ElementDBID_ElementPtr)[elementDB.ID]
-	_ = element // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	element := backRepoElement.Map_ElementDBID_ElementPtr[elementDB.ID]
+
+	elementDB.DecodePointers(backRepo, element)
+
+	return
+}
+
+func (elementDB *ElementDB) DecodePointers(backRepo *BackRepoStruct, element *models.Element) {
 
 	// insertion point for checkout of pointer encoding
 	// This loop redeem element.SubElements in the stage from the encode in the back repo
@@ -398,54 +385,18 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseTwoInstance(backRepo 
 	// it appends the stage instance
 	// 1. reset the slice
 	element.SubElements = element.SubElements[:0]
-	// 2. loop all instances in the type in the association end
-	for _, elementDB_AssocEnd := range *backRepo.BackRepoElement.Map_ElementDBID_ElementDB {
-		// 3. Does the ID encoding at the end and the ID at the start matches ?
-		if elementDB_AssocEnd.Element_SubElementsDBID.Int64 == int64(elementDB.ID) {
-			// 4. fetch the associated instance in the stage
-			element_AssocEnd := (*backRepo.BackRepoElement.Map_ElementDBID_ElementPtr)[elementDB_AssocEnd.ID]
-			// 5. append it the association slice
-			element.SubElements = append(element.SubElements, element_AssocEnd)
-		}
+	for _, _Elementid := range elementDB.ElementPointersEncoding.SubElements {
+		element.SubElements = append(element.SubElements, backRepo.BackRepoElement.Map_ElementDBID_ElementPtr[uint(_Elementid)])
 	}
-
-	// sort the array according to the order
-	sort.Slice(element.SubElements, func(i, j int) bool {
-		elementDB_i_ID := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[element.SubElements[i]]
-		elementDB_j_ID := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[element.SubElements[j]]
-
-		elementDB_i := (*backRepo.BackRepoElement.Map_ElementDBID_ElementDB)[elementDB_i_ID]
-		elementDB_j := (*backRepo.BackRepoElement.Map_ElementDBID_ElementDB)[elementDB_j_ID]
-
-		return elementDB_i.Element_SubElementsDBID_Index.Int64 < elementDB_j.Element_SubElementsDBID_Index.Int64
-	})
 
 	// This loop redeem element.Rows in the stage from the encode in the back repo
 	// It parses all RowDB in the back repo and if the reverse pointer encoding matches the back repo ID
 	// it appends the stage instance
 	// 1. reset the slice
 	element.Rows = element.Rows[:0]
-	// 2. loop all instances in the type in the association end
-	for _, rowDB_AssocEnd := range *backRepo.BackRepoRow.Map_RowDBID_RowDB {
-		// 3. Does the ID encoding at the end and the ID at the start matches ?
-		if rowDB_AssocEnd.Element_RowsDBID.Int64 == int64(elementDB.ID) {
-			// 4. fetch the associated instance in the stage
-			row_AssocEnd := (*backRepo.BackRepoRow.Map_RowDBID_RowPtr)[rowDB_AssocEnd.ID]
-			// 5. append it the association slice
-			element.Rows = append(element.Rows, row_AssocEnd)
-		}
+	for _, _Rowid := range elementDB.ElementPointersEncoding.Rows {
+		element.Rows = append(element.Rows, backRepo.BackRepoRow.Map_RowDBID_RowPtr[uint(_Rowid)])
 	}
-
-	// sort the array according to the order
-	sort.Slice(element.Rows, func(i, j int) bool {
-		rowDB_i_ID := (*backRepo.BackRepoRow.Map_RowPtr_RowDBID)[element.Rows[i]]
-		rowDB_j_ID := (*backRepo.BackRepoRow.Map_RowPtr_RowDBID)[element.Rows[j]]
-
-		rowDB_i := (*backRepo.BackRepoRow.Map_RowDBID_RowDB)[rowDB_i_ID]
-		rowDB_j := (*backRepo.BackRepoRow.Map_RowDBID_RowDB)[rowDB_j_ID]
-
-		return rowDB_i.Element_RowsDBID_Index.Int64 < rowDB_j.Element_RowsDBID_Index.Int64
-	})
 
 	return
 }
@@ -453,7 +404,7 @@ func (backRepoElement *BackRepoElementStruct) CheckoutPhaseTwoInstance(backRepo 
 // CommitElement allows commit of a single element (if already staged)
 func (backRepo *BackRepoStruct) CommitElement(element *models.Element) {
 	backRepo.BackRepoElement.CommitPhaseOneInstance(element)
-	if id, ok := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[element]; ok {
+	if id, ok := backRepo.BackRepoElement.Map_ElementPtr_ElementDBID[element]; ok {
 		backRepo.BackRepoElement.CommitPhaseTwoInstance(backRepo, id, element)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -462,14 +413,14 @@ func (backRepo *BackRepoStruct) CommitElement(element *models.Element) {
 // CommitElement allows checkout of a single element (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutElement(element *models.Element) {
 	// check if the element is staged
-	if _, ok := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[element]; ok {
+	if _, ok := backRepo.BackRepoElement.Map_ElementPtr_ElementDBID[element]; ok {
 
-		if id, ok := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[element]; ok {
+		if id, ok := backRepo.BackRepoElement.Map_ElementPtr_ElementDBID[element]; ok {
 			var elementDB ElementDB
 			elementDB.ID = id
 
-			if err := backRepo.BackRepoElement.db.First(&elementDB, id).Error; err != nil {
-				log.Panicln("CheckoutElement : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoElement.db.First(&elementDB, id); err != nil {
+				log.Fatalln("CheckoutElement : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoElement.CheckoutPhaseOneInstance(&elementDB)
 			backRepo.BackRepoElement.CheckoutPhaseTwoInstance(backRepo, &elementDB)
@@ -479,6 +430,20 @@ func (backRepo *BackRepoStruct) CheckoutElement(element *models.Element) {
 
 // CopyBasicFieldsFromElement
 func (elementDB *ElementDB) CopyBasicFieldsFromElement(element *models.Element) {
+	// insertion point for fields commit
+
+	elementDB.Name_Data.String = element.Name
+	elementDB.Name_Data.Valid = true
+
+	elementDB.Content_Data.String = element.Content
+	elementDB.Content_Data.Valid = true
+
+	elementDB.Type_Data.String = element.Type.ToString()
+	elementDB.Type_Data.Valid = true
+}
+
+// CopyBasicFieldsFromElement_WOP
+func (elementDB *ElementDB) CopyBasicFieldsFromElement_WOP(element *models.Element_WOP) {
 	// insertion point for fields commit
 
 	elementDB.Name_Data.String = element.Name
@@ -513,6 +478,14 @@ func (elementDB *ElementDB) CopyBasicFieldsToElement(element *models.Element) {
 	element.Type.FromString(elementDB.Type_Data.String)
 }
 
+// CopyBasicFieldsToElement_WOP
+func (elementDB *ElementDB) CopyBasicFieldsToElement_WOP(element *models.Element_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	element.Name = elementDB.Name_Data.String
+	element.Content = elementDB.Content_Data.String
+	element.Type.FromString(elementDB.Type_Data.String)
+}
+
 // CopyBasicFieldsToElementWOP
 func (elementDB *ElementDB) CopyBasicFieldsToElementWOP(element *ElementWOP) {
 	element.ID = int(elementDB.ID)
@@ -530,7 +503,7 @@ func (backRepoElement *BackRepoElementStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*ElementDB, 0)
-	for _, elementDB := range *backRepoElement.Map_ElementDBID_ElementDB {
+	for _, elementDB := range backRepoElement.Map_ElementDBID_ElementDB {
 		forBackup = append(forBackup, elementDB)
 	}
 
@@ -541,12 +514,12 @@ func (backRepoElement *BackRepoElementStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json Element ", filename, " ", err.Error())
+		log.Fatal("Cannot json Element ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json Element file", err.Error())
+		log.Fatal("Cannot write the json Element file", err.Error())
 	}
 }
 
@@ -556,7 +529,7 @@ func (backRepoElement *BackRepoElementStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*ElementDB, 0)
-	for _, elementDB := range *backRepoElement.Map_ElementDBID_ElementDB {
+	for _, elementDB := range backRepoElement.Map_ElementDBID_ElementDB {
 		forBackup = append(forBackup, elementDB)
 	}
 
@@ -566,7 +539,7 @@ func (backRepoElement *BackRepoElementStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("Element")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -591,13 +564,13 @@ func (backRepoElement *BackRepoElementStruct) RestoreXLPhaseOne(file *xlsx.File)
 	sh, ok := file.Sheet["Element"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoElement.rowVisitorElement)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -617,11 +590,11 @@ func (backRepoElement *BackRepoElementStruct) rowVisitorElement(row *xlsx.Row) e
 
 		elementDB_ID_atBackupTime := elementDB.ID
 		elementDB.ID = 0
-		query := backRepoElement.db.Create(elementDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoElement.db.Create(elementDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoElement.Map_ElementDBID_ElementDB)[elementDB.ID] = elementDB
+		backRepoElement.Map_ElementDBID_ElementDB[elementDB.ID] = elementDB
 		BackRepoElementid_atBckpTime_newID[elementDB_ID_atBackupTime] = elementDB.ID
 	}
 	return nil
@@ -639,7 +612,7 @@ func (backRepoElement *BackRepoElementStruct) RestorePhaseOne(dirPath string) {
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json Element file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json Element file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -654,16 +627,16 @@ func (backRepoElement *BackRepoElementStruct) RestorePhaseOne(dirPath string) {
 
 		elementDB_ID_atBackupTime := elementDB.ID
 		elementDB.ID = 0
-		query := backRepoElement.db.Create(elementDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoElement.db.Create(elementDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoElement.Map_ElementDBID_ElementDB)[elementDB.ID] = elementDB
+		backRepoElement.Map_ElementDBID_ElementDB[elementDB.ID] = elementDB
 		BackRepoElementid_atBckpTime_newID[elementDB_ID_atBackupTime] = elementDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json Element file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json Element file", err.Error())
 	}
 }
 
@@ -671,25 +644,44 @@ func (backRepoElement *BackRepoElementStruct) RestorePhaseOne(dirPath string) {
 // to compute new index
 func (backRepoElement *BackRepoElementStruct) RestorePhaseTwo() {
 
-	for _, elementDB := range *backRepoElement.Map_ElementDBID_ElementDB {
+	for _, elementDB := range backRepoElement.Map_ElementDBID_ElementDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = elementDB
 
 		// insertion point for reindexing pointers encoding
-		// This reindex element.SubElements
-		if elementDB.Element_SubElementsDBID.Int64 != 0 {
-			elementDB.Element_SubElementsDBID.Int64 =
-				int64(BackRepoElementid_atBckpTime_newID[uint(elementDB.Element_SubElementsDBID.Int64)])
-		}
-
 		// update databse with new index encoding
-		query := backRepoElement.db.Model(elementDB).Updates(*elementDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoElement.db.Model(elementDB)
+		_, err := db.Updates(*elementDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoElement.ResetReversePointers commits all staged instances of Element to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoElement *BackRepoElementStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, element := range backRepoElement.Map_ElementDBID_ElementPtr {
+		backRepoElement.ResetReversePointersInstance(backRepo, idx, element)
+	}
+
+	return
+}
+
+func (backRepoElement *BackRepoElementStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, element *models.Element) (Error error) {
+
+	// fetch matching elementDB
+	if elementDB, ok := backRepoElement.Map_ElementDBID_ElementDB[idx]; ok {
+		_ = elementDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

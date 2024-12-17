@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gong/go/db"
 	"github.com/fullstack-lang/gong/go/models"
 )
 
@@ -35,22 +36,17 @@ var dummy_GongTimeField_sort sort.Float64Slice
 type GongTimeFieldAPI struct {
 	gorm.Model
 
-	models.GongTimeField
+	models.GongTimeField_WOP
 
 	// encoding of pointers
-	GongTimeFieldPointersEnconding
+	// for API, it cannot be embedded
+	GongTimeFieldPointersEncoding GongTimeFieldPointersEncoding
 }
 
-// GongTimeFieldPointersEnconding encodes pointers to Struct and
+// GongTimeFieldPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type GongTimeFieldPointersEnconding struct {
+type GongTimeFieldPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
-
-	// Implementation of a reverse ID for field GongStruct{}.GongTimeFields []*GongTimeField
-	GongStruct_GongTimeFieldsDBID sql.NullInt64
-
-	// implementation of the index of the withing the slice
-	GongStruct_GongTimeFieldsDBID_Index sql.NullInt64
 }
 
 // GongTimeFieldDB describes a gongtimefield in the database
@@ -72,8 +68,10 @@ type GongTimeFieldDB struct {
 
 	// Declation for basic field gongtimefieldDB.CompositeStructName
 	CompositeStructName_Data sql.NullString
+
 	// encoding of pointers
-	GongTimeFieldPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	GongTimeFieldPointersEncoding
 }
 
 // GongTimeFieldDBs arrays gongtimefieldDBs
@@ -111,56 +109,32 @@ var GongTimeField_Fields = []string{
 
 type BackRepoGongTimeFieldStruct struct {
 	// stores GongTimeFieldDB according to their gorm ID
-	Map_GongTimeFieldDBID_GongTimeFieldDB *map[uint]*GongTimeFieldDB
+	Map_GongTimeFieldDBID_GongTimeFieldDB map[uint]*GongTimeFieldDB
 
 	// stores GongTimeFieldDB ID according to GongTimeField address
-	Map_GongTimeFieldPtr_GongTimeFieldDBID *map[*models.GongTimeField]uint
+	Map_GongTimeFieldPtr_GongTimeFieldDBID map[*models.GongTimeField]uint
 
 	// stores GongTimeField according to their gorm ID
-	Map_GongTimeFieldDBID_GongTimeFieldPtr *map[uint]*models.GongTimeField
+	Map_GongTimeFieldDBID_GongTimeFieldPtr map[uint]*models.GongTimeField
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) GetDB() *gorm.DB {
+func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoGongTimeField.stage
+	return
+}
+
+func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) GetDB() db.DBInterface {
 	return backRepoGongTimeField.db
 }
 
 // GetGongTimeFieldDBFromGongTimeFieldPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) GetGongTimeFieldDBFromGongTimeFieldPtr(gongtimefield *models.GongTimeField) (gongtimefieldDB *GongTimeFieldDB) {
-	id := (*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield]
-	gongtimefieldDB = (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[id]
-	return
-}
-
-// BackRepoGongTimeField.Init set up the BackRepo of the GongTimeField
-func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr != nil {
-		err := errors.New("In Init, backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr should be nil")
-		return err
-	}
-
-	if backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB != nil {
-		err := errors.New("In Init, backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB should be nil")
-		return err
-	}
-
-	if backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID != nil {
-		err := errors.New("In Init, backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.GongTimeField, 0)
-	backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr = &tmp
-
-	tmpDB := make(map[uint]*GongTimeFieldDB, 0)
-	backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB = &tmpDB
-
-	tmpID := make(map[*models.GongTimeField]uint, 0)
-	backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID = &tmpID
-
-	backRepoGongTimeField.db = db
+	id := backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield]
+	gongtimefieldDB = backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[id]
 	return
 }
 
@@ -174,7 +148,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseOne(stage *
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, gongtimefield := range *backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr {
+	for id, gongtimefield := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr {
 		if _, ok := stage.GongTimeFields[gongtimefield]; !ok {
 			backRepoGongTimeField.CommitDeleteInstance(id)
 		}
@@ -186,19 +160,20 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseOne(stage *
 // BackRepoGongTimeField.CommitDeleteInstance commits deletion of GongTimeField to the BackRepo
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	gongtimefield := (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr)[id]
+	gongtimefield := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr[id]
 
 	// gongtimefield is not staged anymore, remove gongtimefieldDB
-	gongtimefieldDB := (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[id]
-	query := backRepoGongTimeField.db.Unscoped().Delete(&gongtimefieldDB)
-	if query.Error != nil {
-		return query.Error
+	gongtimefieldDB := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[id]
+	db, _ := backRepoGongTimeField.db.Unscoped()
+	_, err := db.Delete(gongtimefieldDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID), gongtimefield)
-	delete((*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr), id)
-	delete((*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB), id)
+	delete(backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID, gongtimefield)
+	delete(backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr, id)
+	delete(backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB, id)
 
 	return
 }
@@ -208,7 +183,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitDeleteInstance(i
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseOneInstance(gongtimefield *models.GongTimeField) (Error error) {
 
 	// check if the gongtimefield is not commited yet
-	if _, ok := (*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield]; ok {
+	if _, ok := backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield]; ok {
 		return
 	}
 
@@ -216,15 +191,15 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseOneInstance
 	var gongtimefieldDB GongTimeFieldDB
 	gongtimefieldDB.CopyBasicFieldsFromGongTimeField(gongtimefield)
 
-	query := backRepoGongTimeField.db.Create(&gongtimefieldDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoGongTimeField.db.Create(&gongtimefieldDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield] = gongtimefieldDB.ID
-	(*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr)[gongtimefieldDB.ID] = gongtimefield
-	(*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[gongtimefieldDB.ID] = &gongtimefieldDB
+	backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield] = gongtimefieldDB.ID
+	backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr[gongtimefieldDB.ID] = gongtimefield
+	backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[gongtimefieldDB.ID] = &gongtimefieldDB
 
 	return
 }
@@ -233,7 +208,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseOneInstance
 // Phase Two is the update of instance with the field in the database
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, gongtimefield := range *backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr {
+	for idx, gongtimefield := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr {
 		backRepoGongTimeField.CommitPhaseTwoInstance(backRepo, idx, gongtimefield)
 	}
 
@@ -245,14 +220,14 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseTwo(backRep
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, gongtimefield *models.GongTimeField) (Error error) {
 
 	// fetch matching gongtimefieldDB
-	if gongtimefieldDB, ok := (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[idx]; ok {
+	if gongtimefieldDB, ok := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[idx]; ok {
 
 		gongtimefieldDB.CopyBasicFieldsFromGongTimeField(gongtimefield)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoGongTimeField.db.Save(&gongtimefieldDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoGongTimeField.db.Save(gongtimefieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -267,20 +242,19 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CommitPhaseTwoInstance
 // BackRepoGongTimeField.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseOne() (Error error) {
 
 	gongtimefieldDBArray := make([]GongTimeFieldDB, 0)
-	query := backRepoGongTimeField.db.Find(&gongtimefieldDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoGongTimeField.db.Find(&gongtimefieldDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	gongtimefieldInstancesToBeRemovedFromTheStage := make(map[*models.GongTimeField]any)
-	for key, value := range models.Stage.GongTimeFields {
+	for key, value := range backRepoGongTimeField.stage.GongTimeFields {
 		gongtimefieldInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -290,7 +264,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseOne() (Er
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		gongtimefield, ok := (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr)[gongtimefieldDB.ID]
+		gongtimefield, ok := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr[gongtimefieldDB.ID]
 		if ok {
 			delete(gongtimefieldInstancesToBeRemovedFromTheStage, gongtimefield)
 		}
@@ -298,13 +272,13 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseOne() (Er
 
 	// remove from stage and back repo's 3 maps all gongtimefields that are not in the checkout
 	for gongtimefield := range gongtimefieldInstancesToBeRemovedFromTheStage {
-		gongtimefield.Unstage()
+		gongtimefield.Unstage(backRepoGongTimeField.GetStage())
 
 		// remove instance from the back repo 3 maps
-		gongtimefieldID := (*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield]
-		delete((*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID), gongtimefield)
-		delete((*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB), gongtimefieldID)
-		delete((*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr), gongtimefieldID)
+		gongtimefieldID := backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield]
+		delete(backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID, gongtimefield)
+		delete(backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB, gongtimefieldID)
+		delete(backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr, gongtimefieldID)
 	}
 
 	return
@@ -314,24 +288,27 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseOne() (Er
 // models version of the gongtimefieldDB
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseOneInstance(gongtimefieldDB *GongTimeFieldDB) (Error error) {
 
-	gongtimefield, ok := (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr)[gongtimefieldDB.ID]
+	gongtimefield, ok := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr[gongtimefieldDB.ID]
 	if !ok {
 		gongtimefield = new(models.GongTimeField)
 
-		(*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr)[gongtimefieldDB.ID] = gongtimefield
-		(*backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield] = gongtimefieldDB.ID
+		backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr[gongtimefieldDB.ID] = gongtimefield
+		backRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield] = gongtimefieldDB.ID
 
 		// append model store with the new element
 		gongtimefield.Name = gongtimefieldDB.Name_Data.String
-		gongtimefield.Stage()
+		gongtimefield.Stage(backRepoGongTimeField.GetStage())
 	}
 	gongtimefieldDB.CopyBasicFieldsToGongTimeField(gongtimefield)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	gongtimefield.Stage(backRepoGongTimeField.GetStage())
 
 	// preserve pointer to gongtimefieldDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_GongTimeFieldDBID_GongTimeFieldDB)[gongtimefieldDB hold variable pointers
 	gongtimefieldDB_Data := *gongtimefieldDB
 	preservedPtrToGongTimeField := &gongtimefieldDB_Data
-	(*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[gongtimefieldDB.ID] = preservedPtrToGongTimeField
+	backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[gongtimefieldDB.ID] = preservedPtrToGongTimeField
 
 	return
 }
@@ -341,7 +318,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseOneInstan
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, gongtimefieldDB := range *backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
+	for _, gongtimefieldDB := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
 		backRepoGongTimeField.CheckoutPhaseTwoInstance(backRepo, gongtimefieldDB)
 	}
 	return
@@ -351,8 +328,14 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseTwo(backR
 // Phase Two is the update of instance with the field in the database
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, gongtimefieldDB *GongTimeFieldDB) (Error error) {
 
-	gongtimefield := (*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr)[gongtimefieldDB.ID]
-	_ = gongtimefield // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	gongtimefield := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr[gongtimefieldDB.ID]
+
+	gongtimefieldDB.DecodePointers(backRepo, gongtimefield)
+
+	return
+}
+
+func (gongtimefieldDB *GongTimeFieldDB) DecodePointers(backRepo *BackRepoStruct, gongtimefield *models.GongTimeField) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -361,7 +344,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) CheckoutPhaseTwoInstan
 // CommitGongTimeField allows commit of a single gongtimefield (if already staged)
 func (backRepo *BackRepoStruct) CommitGongTimeField(gongtimefield *models.GongTimeField) {
 	backRepo.BackRepoGongTimeField.CommitPhaseOneInstance(gongtimefield)
-	if id, ok := (*backRepo.BackRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield]; ok {
+	if id, ok := backRepo.BackRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield]; ok {
 		backRepo.BackRepoGongTimeField.CommitPhaseTwoInstance(backRepo, id, gongtimefield)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -370,14 +353,14 @@ func (backRepo *BackRepoStruct) CommitGongTimeField(gongtimefield *models.GongTi
 // CommitGongTimeField allows checkout of a single gongtimefield (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutGongTimeField(gongtimefield *models.GongTimeField) {
 	// check if the gongtimefield is staged
-	if _, ok := (*backRepo.BackRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield]; ok {
+	if _, ok := backRepo.BackRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield]; ok {
 
-		if id, ok := (*backRepo.BackRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID)[gongtimefield]; ok {
+		if id, ok := backRepo.BackRepoGongTimeField.Map_GongTimeFieldPtr_GongTimeFieldDBID[gongtimefield]; ok {
 			var gongtimefieldDB GongTimeFieldDB
 			gongtimefieldDB.ID = id
 
-			if err := backRepo.BackRepoGongTimeField.db.First(&gongtimefieldDB, id).Error; err != nil {
-				log.Panicln("CheckoutGongTimeField : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoGongTimeField.db.First(&gongtimefieldDB, id); err != nil {
+				log.Fatalln("CheckoutGongTimeField : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoGongTimeField.CheckoutPhaseOneInstance(&gongtimefieldDB)
 			backRepo.BackRepoGongTimeField.CheckoutPhaseTwoInstance(backRepo, &gongtimefieldDB)
@@ -387,6 +370,20 @@ func (backRepo *BackRepoStruct) CheckoutGongTimeField(gongtimefield *models.Gong
 
 // CopyBasicFieldsFromGongTimeField
 func (gongtimefieldDB *GongTimeFieldDB) CopyBasicFieldsFromGongTimeField(gongtimefield *models.GongTimeField) {
+	// insertion point for fields commit
+
+	gongtimefieldDB.Name_Data.String = gongtimefield.Name
+	gongtimefieldDB.Name_Data.Valid = true
+
+	gongtimefieldDB.Index_Data.Int64 = int64(gongtimefield.Index)
+	gongtimefieldDB.Index_Data.Valid = true
+
+	gongtimefieldDB.CompositeStructName_Data.String = gongtimefield.CompositeStructName
+	gongtimefieldDB.CompositeStructName_Data.Valid = true
+}
+
+// CopyBasicFieldsFromGongTimeField_WOP
+func (gongtimefieldDB *GongTimeFieldDB) CopyBasicFieldsFromGongTimeField_WOP(gongtimefield *models.GongTimeField_WOP) {
 	// insertion point for fields commit
 
 	gongtimefieldDB.Name_Data.String = gongtimefield.Name
@@ -421,6 +418,14 @@ func (gongtimefieldDB *GongTimeFieldDB) CopyBasicFieldsToGongTimeField(gongtimef
 	gongtimefield.CompositeStructName = gongtimefieldDB.CompositeStructName_Data.String
 }
 
+// CopyBasicFieldsToGongTimeField_WOP
+func (gongtimefieldDB *GongTimeFieldDB) CopyBasicFieldsToGongTimeField_WOP(gongtimefield *models.GongTimeField_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	gongtimefield.Name = gongtimefieldDB.Name_Data.String
+	gongtimefield.Index = int(gongtimefieldDB.Index_Data.Int64)
+	gongtimefield.CompositeStructName = gongtimefieldDB.CompositeStructName_Data.String
+}
+
 // CopyBasicFieldsToGongTimeFieldWOP
 func (gongtimefieldDB *GongTimeFieldDB) CopyBasicFieldsToGongTimeFieldWOP(gongtimefield *GongTimeFieldWOP) {
 	gongtimefield.ID = int(gongtimefieldDB.ID)
@@ -438,7 +443,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) Backup(dirPath string)
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*GongTimeFieldDB, 0)
-	for _, gongtimefieldDB := range *backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
+	for _, gongtimefieldDB := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
 		forBackup = append(forBackup, gongtimefieldDB)
 	}
 
@@ -449,12 +454,12 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) Backup(dirPath string)
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json GongTimeField ", filename, " ", err.Error())
+		log.Fatal("Cannot json GongTimeField ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json GongTimeField file", err.Error())
+		log.Fatal("Cannot write the json GongTimeField file", err.Error())
 	}
 }
 
@@ -464,7 +469,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) BackupXL(file *xlsx.Fi
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*GongTimeFieldDB, 0)
-	for _, gongtimefieldDB := range *backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
+	for _, gongtimefieldDB := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
 		forBackup = append(forBackup, gongtimefieldDB)
 	}
 
@@ -474,7 +479,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) BackupXL(file *xlsx.Fi
 
 	sh, err := file.AddSheet("GongTimeField")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -499,13 +504,13 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) RestoreXLPhaseOne(file
 	sh, ok := file.Sheet["GongTimeField"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoGongTimeField.rowVisitorGongTimeField)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -525,11 +530,11 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) rowVisitorGongTimeFiel
 
 		gongtimefieldDB_ID_atBackupTime := gongtimefieldDB.ID
 		gongtimefieldDB.ID = 0
-		query := backRepoGongTimeField.db.Create(gongtimefieldDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoGongTimeField.db.Create(gongtimefieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[gongtimefieldDB.ID] = gongtimefieldDB
+		backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[gongtimefieldDB.ID] = gongtimefieldDB
 		BackRepoGongTimeFieldid_atBckpTime_newID[gongtimefieldDB_ID_atBackupTime] = gongtimefieldDB.ID
 	}
 	return nil
@@ -547,7 +552,7 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) RestorePhaseOne(dirPat
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json GongTimeField file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json GongTimeField file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -562,16 +567,16 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) RestorePhaseOne(dirPat
 
 		gongtimefieldDB_ID_atBackupTime := gongtimefieldDB.ID
 		gongtimefieldDB.ID = 0
-		query := backRepoGongTimeField.db.Create(gongtimefieldDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoGongTimeField.db.Create(gongtimefieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB)[gongtimefieldDB.ID] = gongtimefieldDB
+		backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[gongtimefieldDB.ID] = gongtimefieldDB
 		BackRepoGongTimeFieldid_atBckpTime_newID[gongtimefieldDB_ID_atBackupTime] = gongtimefieldDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json GongTimeField file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json GongTimeField file", err.Error())
 	}
 }
 
@@ -579,25 +584,44 @@ func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) RestorePhaseOne(dirPat
 // to compute new index
 func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) RestorePhaseTwo() {
 
-	for _, gongtimefieldDB := range *backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
+	for _, gongtimefieldDB := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = gongtimefieldDB
 
 		// insertion point for reindexing pointers encoding
-		// This reindex gongtimefield.GongTimeFields
-		if gongtimefieldDB.GongStruct_GongTimeFieldsDBID.Int64 != 0 {
-			gongtimefieldDB.GongStruct_GongTimeFieldsDBID.Int64 =
-				int64(BackRepoGongStructid_atBckpTime_newID[uint(gongtimefieldDB.GongStruct_GongTimeFieldsDBID.Int64)])
-		}
-
 		// update databse with new index encoding
-		query := backRepoGongTimeField.db.Model(gongtimefieldDB).Updates(*gongtimefieldDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoGongTimeField.db.Model(gongtimefieldDB)
+		_, err := db.Updates(*gongtimefieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoGongTimeField.ResetReversePointers commits all staged instances of GongTimeField to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, gongtimefield := range backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldPtr {
+		backRepoGongTimeField.ResetReversePointersInstance(backRepo, idx, gongtimefield)
+	}
+
+	return
+}
+
+func (backRepoGongTimeField *BackRepoGongTimeFieldStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, gongtimefield *models.GongTimeField) (Error error) {
+
+	// fetch matching gongtimefieldDB
+	if gongtimefieldDB, ok := backRepoGongTimeField.Map_GongTimeFieldDBID_GongTimeFieldDB[idx]; ok {
+		_ = gongtimefieldDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

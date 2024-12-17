@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // File is a high level structure providing a slice of Sheet structs
@@ -83,15 +82,17 @@ func NewFile(options ...FileOption) *File {
 // xlsx.File struct for it.  You may pass it zero, one or
 // many FileOption functions that affect the behaviour of the file.
 func OpenFile(fileName string, options ...FileOption) (file *File, err error) {
-	var z *zip.ReadCloser
 	wrap := func(err error) (*File, error) {
 		return nil, fmt.Errorf("OpenFile: %w", err)
 	}
 
+	var z *zip.ReadCloser
 	z, err = zip.OpenReader(fileName)
 	if err != nil {
 		return wrap(err)
 	}
+	defer z.Close()
+
 	file, err = ReadZip(z, options...)
 	if err != nil {
 		return wrap(err)
@@ -124,10 +125,10 @@ func OpenReaderAt(r io.ReaderAt, size int64, options ...FileOption) (*File, erro
 //
 // For example:
 //
-//    var mySlice [][][]string
-//    var value string
-//    mySlice = xlsx.FileToSlice("myXLSX.xlsx")
-//    value = mySlice[0][0][0]
+//	var mySlice [][][]string
+//	var value string
+//	mySlice = xlsx.FileToSlice("myXLSX.xlsx")
+//	value = mySlice[0][0][0]
 //
 // Here, value would be set to the raw value of the cell A1 in the
 // first sheet in the XLSX file.
@@ -153,22 +154,22 @@ func FileToSliceUnmerged(path string, options ...FileOption) ([][][]string, erro
 
 // Save the File to an xlsx file at the provided path.
 func (f *File) Save(path string) (err error) {
-	wrap := func(err error) error {
-		return fmt.Errorf("File.Save(%s): %w", path, err)
-	}
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("File.Save(%s): %w", path, err)
+		}
+	}()
 	target, err := os.Create(path)
 	if err != nil {
-		return wrap(err)
+		return err
 	}
+	defer func() {
+		if ie := target.Close(); ie != nil {
+			err = fmt.Errorf("write:%+v close:%w", err, ie)
+		}
+	}()
 	err = f.Write(target)
-	if err != nil {
-		return wrap(err)
-	}
-	err = target.Close()
-	if err != nil {
-		return wrap(err)
-	}
-	return nil
+	return
 }
 
 // Write the File to io.Writer as xlsx
@@ -201,22 +202,16 @@ func (f *File) AddSheetWithCellStore(sheetName string, constructor CellStoreCons
 	if _, exists := f.Sheet[sheetName]; exists {
 		return nil, fmt.Errorf("duplicate sheet name '%s'.", sheetName)
 	}
-	runeLength := utf8.RuneCountInString(sheetName)
-	if runeLength > 31 || runeLength == 0 {
-		return nil, fmt.Errorf("sheet name must be 31 or fewer characters long.  It is currently '%d' characters long", runeLength)
-	}
-	// Iterate over the runes
-	for _, r := range sheetName {
-		// Excel forbids : \ / ? * [ ]
-		if r == ':' || r == '\\' || r == '/' || r == '?' || r == '*' || r == '[' || r == ']' {
-			return nil, fmt.Errorf("sheet name must not contain any restricted characters : \\ / ? * [ ] but contains '%s'", string(r))
-		}
+
+	if err := IsSaneSheetName(sheetName); err != nil {
+		return nil, fmt.Errorf("sheet name is not valid: %w", err)
 	}
 	sheet := &Sheet{
-		Name:     sheetName,
-		File:     f,
-		Selected: len(f.Sheets) == 0,
-		Cols:     &ColStore{},
+		Name:          sheetName,
+		File:          f,
+		Selected:      len(f.Sheets) == 0,
+		Cols:          &ColStore{},
+		cellStoreName: sheetName,
 	}
 
 	sheet.cellStore, err = constructor()
@@ -232,6 +227,9 @@ func (f *File) AddSheetWithCellStore(sheetName string, constructor CellStoreCons
 func (f *File) AppendSheet(sheet Sheet, sheetName string) (*Sheet, error) {
 	if _, exists := f.Sheet[sheetName]; exists {
 		return nil, fmt.Errorf("duplicate sheet name '%s'.", sheetName)
+	}
+	if err := IsSaneSheetName(sheetName); err != nil {
+		return nil, fmt.Errorf("sheet name is not valid: %w", err)
 	}
 	sheet.Name = sheetName
 	sheet.File = f
@@ -298,11 +296,46 @@ func addRelationshipNameSpaceToWorksheet(worksheetMarshal string) string {
 	return newSheetMarshall
 }
 
+func cellIDStringWithFixed(cellIDString string) string {
+	letterPart := strings.Map(letterOnlyMapF, cellIDString)
+	intPart := strings.Map(intOnlyMapF, cellIDString)
+
+	if letterPart != "" && intPart == "" {
+		return fixedCellRefChar + letterPart
+	} else if letterPart != "" && intPart != "" {
+		return fixedCellRefChar + letterPart + fixedCellRefChar + intPart
+	}
+
+	return ""
+}
+
+// AutoFilter doesn't work in LibreOffice unless a special "FilterDatabase" tag
+// is present in the "DefinedNames" array.  See:
+//   - https://github.com/SheetJS/sheetjs/issues/1165
+//   - https://bugs.documentfoundation.org/show_bug.cgi?id=118592
+func autoFilterDefinedName(sheet *Sheet, sheetIndex int) (*xlsxDefinedName, error) {
+	if sheet.AutoFilter == nil {
+		return nil, nil
+	}
+
+	return &xlsxDefinedName{
+		Data: fmt.Sprintf(
+			"'%s'!%v:%v",
+			strings.ReplaceAll(sheet.Name, "'", "''"),
+			cellIDStringWithFixed(sheet.AutoFilter.TopLeftCell),
+			cellIDStringWithFixed(sheet.AutoFilter.BottomRightCell),
+		),
+		Name:         "_xlnm._FilterDatabase",
+		LocalSheetID: sheetIndex - 1,
+		Hidden:       true,
+	}, nil
+}
+
 // MakeStreamParts constructs a map of file name to XML content
 // representing the file in terms of the structure of an XLSX file.
 func (f *File) MakeStreamParts() (map[string]string, error) {
 	var parts map[string]string
-	var refTable *RefTable = NewSharedStringRefTable()
+	var refTable *RefTable = NewSharedStringRefTable(DEFAULT_REFTABLE_SIZE)
 	refTable.isWrite = true
 	var workbookRels WorkBookRels = make(WorkBookRels)
 	var err error
@@ -353,6 +386,7 @@ func (f *File) MakeStreamParts() (map[string]string, error) {
 				PartName:    "/" + partName,
 				ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"})
 		workbookRels[rId] = sheetPath
+
 		workbook.Sheets.Sheet[sheetIndex-1] = xlsxSheet{
 			Name:    sheet.Name,
 			SheetId: sheetId,
@@ -371,7 +405,19 @@ func (f *File) MakeStreamParts() (map[string]string, error) {
 				return parts, err
 			}
 		}
+
+		definedName, err := autoFilterDefinedName(sheet, sheetIndex)
+		if err != nil {
+			return parts, err
+		} else if definedName != nil {
+			workbook.DefinedNames.DefinedName = append(workbook.DefinedNames.DefinedName, *definedName)
+		}
+
 		sheetIndex++
+	}
+
+	for _, dn := range f.DefinedNames {
+		workbook.DefinedNames.DefinedName = append(workbook.DefinedNames.DefinedName, *dn)
 	}
 
 	workbookMarshal, err := marshal(workbook)
@@ -419,7 +465,7 @@ func (f *File) MakeStreamParts() (map[string]string, error) {
 // MarshallParts constructs a map of file name to XML content representing the file
 // in terms of the structure of an XLSX file.
 func (f *File) MarshallParts(zipWriter *zip.Writer) error {
-	var refTable *RefTable = NewSharedStringRefTable()
+	var refTable *RefTable = NewSharedStringRefTable(DEFAULT_REFTABLE_SIZE)
 	refTable.isWrite = true
 	var workbookRels WorkBookRels = make(WorkBookRels)
 	var err error
@@ -508,7 +554,19 @@ func (f *File) MarshallParts(zipWriter *zip.Writer) error {
 				return wrap(err)
 			}
 		}
+
+		definedName, err := autoFilterDefinedName(sheet, sheetIndex)
+		if err != nil {
+			return wrap(err)
+		} else if definedName != nil {
+			workbook.DefinedNames.DefinedName = append(workbook.DefinedNames.DefinedName, *definedName)
+		}
+
 		sheetIndex++
+	}
+
+	for _, dn := range f.DefinedNames {
+		workbook.DefinedNames.DefinedName = append(workbook.DefinedNames.DefinedName, *dn)
 	}
 
 	workbookMarshal, err := marshal(workbook)
@@ -584,17 +642,18 @@ func (f *File) MarshallParts(zipWriter *zip.Writer) error {
 //
 // For example:
 //
-//    var mySlice [][][]string
-//    var value string
-//    mySlice = xlsx.FileToSlice("myXLSX.xlsx")
-//    value = mySlice[0][0][0]
+//	var mySlice [][][]string
+//	var value string
+//	mySlice = xlsx.FileToSlice("myXLSX.xlsx")
+//	value = mySlice[0][0][0]
 //
 // Here, value would be set to the raw value of the cell A1 in the
 // first sheet in the XLSX file.
 func (f *File) ToSlice() (output [][][]string, err error) {
-	output = [][][]string{}
+	sheetCount := len(f.Sheets)
+	output = make([][][]string, 0, sheetCount)
 	for _, sheet := range f.Sheets {
-		s := [][]string{}
+		s := make([][]string, 0, sheet.MaxRow)
 		err := sheet.ForEachRow(func(row *Row) error {
 			r := []string{}
 			err := row.ForEachCell(func(cell *Cell) error {
@@ -635,9 +694,11 @@ func (f *File) ToSlice() (output [][][]string, err error) {
 // | 2012 | 2013 | Egg   | 80 |
 // This sheet will be converted to the slice:
 // [
-//    [2011 2011 Bread 20]
-//    [2011 2011 Fish  70]
-//    [2012 2013 Egg   80]
+//
+//	[2011 2011 Bread 20]
+//	[2011 2011 Fish  70]
+//	[2012 2013 Egg   80]
+//
 // ]
 func (f *File) ToSliceUnmerged() (output [][][]string, err error) {
 	output, err = f.ToSlice()
@@ -668,4 +729,13 @@ func (f *File) ToSliceUnmerged() (output [][][]string, err error) {
 	}
 
 	return output, nil
+}
+
+type DefinedName xlsxDefinedName
+
+// AddDefinedName adds a new Name definition to the workbook.
+func (f *File) AddDefinedName(name DefinedName) error {
+	definedName := xlsxDefinedName(name)
+	f.DefinedNames = append(f.DefinedNames, &definedName)
+	return nil
 }

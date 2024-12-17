@@ -9,10 +9,14 @@ import (
 	"go/token"
 	"io/fs"
 	"log"
-	"os"
+	"math"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
+
+	"github.com/fullstack-lang/gong/go/ignore"
+	// to parse the .frontignore file
 )
 
 func ParseEmbedModel(embeddedDir embed.FS, source string) map[string]*ast.Package {
@@ -54,7 +58,7 @@ func ParseEmbedModel(embeddedDir embed.FS, source string) map[string]*ast.Packag
 	return pkgs
 }
 
-func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
+func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg, goGitignoreEntries *[]ignore.GitignoreEntry) {
 
 	// this is to store struct that are not gongstruct
 	// but that can be embedded
@@ -80,7 +84,55 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 
 	map_StructName_hasIgnoreStatement := make(map[string]bool)
 	for _, t := range typeDocumentation.Types {
-		map_StructName_hasIgnoreStatement[t.Name] = strings.Contains(t.Doc, "swagger:ignore")
+		map_StructName_hasIgnoreStatement[t.Name] = strings.Contains(t.Doc, "swagger:ignore") || strings.Contains(t.Doc, "gong:ignore")
+	}
+
+	// in astPackage.Files is the map of filePath to file
+	// the filePath can be absolute of relative
+	// in order to compute at what level to the "models" directory we are
+	// we need to process all filePath and get the distance to the "models" directory
+	// given that "models" directory name is forbiden in the path
+	minFilePathLength := math.MaxInt
+	for filePath := range astPackage.Files {
+		// get directories to the file
+		directories := make([]string, 0)
+		workingFilePath := filePath
+		for {
+			dir := filepath.Dir(workingFilePath)
+			if dir == workingFilePath {
+				break
+			}
+			directories = append(directories, dir)
+			workingFilePath = dir
+		}
+
+		if len(directories) < minFilePathLength {
+			minFilePathLength = len(directories)
+		}
+	}
+
+	// pre pass to identity all struct with a NameField
+	mapStructWithNameField := make(map[string]any)
+	for _, file := range astPackage.Files {
+		for _, decl := range file.Decls {
+			switch genDecl := decl.(type) {
+			case *ast.GenDecl:
+				for _, spec := range genDecl.Specs {
+					switch typeSpec := spec.(type) {
+					case *ast.TypeSpec:
+						switch _type := typeSpec.Type.(type) {
+						case *ast.StructType:
+							hasName := IsNamedStructWithoutEmbedded(_type, nil)
+							if hasName {
+								mapStructWithNameField[typeSpec.Name.Name] = true
+							}
+							// log.Println("file ", typeSpec.Name.Name, hasName)
+						}
+
+					}
+				}
+			}
+		}
 	}
 
 	// first pass : get "type" definition for enum & struct
@@ -88,15 +140,32 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 	// search all files
 	for filePath, file := range astPackage.Files {
 
-		var fileName string
+		var isFileFrontIgnored bool
+		fileName := filepath.Base(filePath)
 
-		if strings.Contains(filePath, string(os.PathSeparator)) {
-			fileNames := strings.Split(filePath, string(os.PathSeparator))
-			fileName = fileNames[len(fileNames)-1]
+		// get directories to the file
+		directories := make([]string, 0)
+		workingFilePath := filePath
+		for {
+			dir := filepath.Dir(workingFilePath)
+			if dir == workingFilePath {
+				break
+			}
+			directories = append(directories, dir)
+			workingFilePath = dir
 		}
 
-		if fileName == "gong.go" {
+		// we do not take the files in the sub directories (yet)
+		if len(directories) > minFilePathLength {
 			continue
+		}
+
+		if slices.Contains(GeneratedModelFiles, filepath.Base(filePath)) {
+			continue
+		}
+
+		if goGitignoreEntries != nil && ignore.CheckFileMatches(fileName, *goGitignoreEntries) {
+			isFileFrontIgnored = true
 		}
 
 		// for exploration
@@ -117,7 +186,6 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 
 		// first pass for gathering the "type" definitions
 		for _, decl := range file.Decls {
-			_ = decl
 
 			switch genDecl := decl.(type) {
 			case *ast.GenDecl:
@@ -150,7 +218,12 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 							case "string":
 								enumType = String
 							default:
-								log.Fatal("Invalid definition of a Gongstruct ", typeSpec.Name.Name, " type ", _type.Name)
+								continue
+							}
+
+							hasIgnoreStatement := map_StructName_hasIgnoreStatement[typeSpec.Name.Name]
+							if hasIgnoreStatement {
+								continue
 							}
 
 							modelEnum := &GongEnum{
@@ -163,25 +236,23 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 						case *ast.StructType:
 
 							// fetch the name of the Gongstruct by identifying if there is a field with name "Name"
-							var hasNameField bool
-							for _, field := range _type.Fields.List {
-								if len(field.Names) > 0 && field.Names[0].Name == "Name" {
-									hasNameField = true
-								}
-							}
+							IsNamedStruct := IsNamedStructWithoutEmbedded(_type, mapStructWithNameField)
 							hasIgnoreStatement := map_StructName_hasIgnoreStatement[typeSpec.Name.Name]
 
-							if hasNameField && !hasIgnoreStatement {
-								gongstruct := (&GongStruct{Name: typeSpec.Name.Name}).Stage()
+							if IsNamedStruct && !hasIgnoreStatement {
+								gongstruct := (&GongStruct{
+									Name:              typeSpec.Name.Name,
+									IsIgnoredForFront: isFileFrontIgnored}).
+									Stage(modelPkg.GetStage())
 								modelPkg.GongStructs[modelPkg.PkgPath+"."+typeSpec.Name.Name] = gongstruct
-							} else {
+							}
+							if !hasIgnoreStatement {
 								map_Structname_fieldList[typeSpec.Name.Name] = &_type.Fields.List
 							}
 						default:
 						}
 					default:
 					}
-
 				}
 
 			default:
@@ -194,13 +265,7 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 	// second pass
 	for filePath, file := range astPackage.Files {
 
-		var fileName string
-		if strings.Contains(filePath, string(os.PathSeparator)) {
-			fileNames := strings.Split(filePath, string(os.PathSeparator))
-			fileName = fileNames[len(fileNames)-1]
-		}
-
-		if fileName == "gong.go" {
+		if slices.Contains(GeneratedModelFiles, filepath.Base(filePath)) {
 			continue
 		}
 
@@ -279,14 +344,9 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 							// log.Println("Parsing fields of gongstruct ", spec.Name.Name)
 
 							// fetch the name of the Gongstruct by identifying if there is a field with name "Name"
-							var isGongStruct bool
-							for _, field := range _type.Fields.List {
-								if len(field.Names) > 0 && field.Names[0].Name == "Name" {
-									isGongStruct = true
-								}
-							}
+							IsNamedStruct := IsNamedStructWithoutEmbedded(_type, mapStructWithNameField)
 							hasIgnoreStatement := map_StructName_hasIgnoreStatement[spec.Name.Name]
-							if isGongStruct && !hasIgnoreStatement {
+							if IsNamedStruct && !hasIgnoreStatement {
 								gongstruct, ok := modelPkg.GongStructs[modelPkg.PkgPath+"."+spec.Name.Name]
 								structName := spec.Name.Name
 								if !ok {
@@ -294,7 +354,11 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 								}
 								_ = gongstruct
 
-								GenerateFieldParser(&_type.Fields.List, gongstruct, &map_Structname_fieldList, modelPkg, "")
+								GenerateFieldParser(
+									&_type.Fields.List,
+									gongstruct,
+									&map_Structname_fieldList,
+									modelPkg, "", "")
 							}
 						}
 					default:
@@ -306,4 +370,13 @@ func WalkParser(parserPkgs map[string]*ast.Package, modelPkg *ModelPkg) {
 		}
 	}
 
+	// pass to detect if there a function that matches the OnAfterUpdate signature
+	for filePath, file := range astPackage.Files {
+
+		if slices.Contains(GeneratedModelFiles, filepath.Base(filePath)) {
+			continue
+		}
+
+		checkFunctionSignature(file, modelPkg)
+	}
 }
