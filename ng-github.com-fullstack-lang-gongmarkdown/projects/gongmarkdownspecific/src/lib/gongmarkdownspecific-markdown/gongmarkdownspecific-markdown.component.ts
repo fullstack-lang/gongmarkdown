@@ -2,17 +2,16 @@ import { Component, Input, OnInit, importProvidersFrom } from '@angular/core';
 import * as gongmarkdown from '../../../../gongmarkdown/src/public-api'
 import { Observable, timer } from 'rxjs';
 import { CommonModule } from '@angular/common';
-import { MarkdownModule } from 'ngx-markdown';
-import { HttpClientModule } from '@angular/common/http';
+import { MarkdownModule, provideMarkdown } from 'ngx-markdown';
+
 
 @Component({
   selector: 'lib-gongmarkdownspecific-markdown',
   templateUrl: './gongmarkdownspecific-markdown.component.html',
   styleUrls: ['./gongmarkdownspecific-markdown.component.css'],
   standalone: true,
-  imports: [CommonModule,
-    MarkdownModule, HttpClientModule  ],
-    providers: [],
+  imports: [CommonModule, MarkdownModule ],
+    providers: [provideMarkdown()],
 
 })
 export class GongmarkdownspecificMarkdownComponent implements OnInit {
