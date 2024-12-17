@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongmarkdown/go/db"
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
 
@@ -35,15 +36,16 @@ var dummy_MarkdownContent_sort sort.Float64Slice
 type MarkdownContentAPI struct {
 	gorm.Model
 
-	models.MarkdownContent
+	models.MarkdownContent_WOP
 
 	// encoding of pointers
-	MarkdownContentPointersEnconding
+	// for API, it cannot be embedded
+	MarkdownContentPointersEncoding MarkdownContentPointersEncoding
 }
 
-// MarkdownContentPointersEnconding encodes pointers to Struct and
+// MarkdownContentPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type MarkdownContentPointersEnconding struct {
+type MarkdownContentPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
 
 	// field Root is a pointer to another Struct (optional or 0..1)
@@ -67,8 +69,10 @@ type MarkdownContentDB struct {
 
 	// Declation for basic field markdowncontentDB.Content
 	Content_Data sql.NullString
+
 	// encoding of pointers
-	MarkdownContentPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	MarkdownContentPointersEncoding
 }
 
 // MarkdownContentDBs arrays markdowncontentDBs
@@ -103,56 +107,32 @@ var MarkdownContent_Fields = []string{
 
 type BackRepoMarkdownContentStruct struct {
 	// stores MarkdownContentDB according to their gorm ID
-	Map_MarkdownContentDBID_MarkdownContentDB *map[uint]*MarkdownContentDB
+	Map_MarkdownContentDBID_MarkdownContentDB map[uint]*MarkdownContentDB
 
 	// stores MarkdownContentDB ID according to MarkdownContent address
-	Map_MarkdownContentPtr_MarkdownContentDBID *map[*models.MarkdownContent]uint
+	Map_MarkdownContentPtr_MarkdownContentDBID map[*models.MarkdownContent]uint
 
 	// stores MarkdownContent according to their gorm ID
-	Map_MarkdownContentDBID_MarkdownContentPtr *map[uint]*models.MarkdownContent
+	Map_MarkdownContentDBID_MarkdownContentPtr map[uint]*models.MarkdownContent
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) GetDB() *gorm.DB {
+func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoMarkdownContent.stage
+	return
+}
+
+func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) GetDB() db.DBInterface {
 	return backRepoMarkdownContent.db
 }
 
 // GetMarkdownContentDBFromMarkdownContentPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) GetMarkdownContentDBFromMarkdownContentPtr(markdowncontent *models.MarkdownContent) (markdowncontentDB *MarkdownContentDB) {
-	id := (*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent]
-	markdowncontentDB = (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[id]
-	return
-}
-
-// BackRepoMarkdownContent.Init set up the BackRepo of the MarkdownContent
-func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr != nil {
-		err := errors.New("In Init, backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr should be nil")
-		return err
-	}
-
-	if backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB != nil {
-		err := errors.New("In Init, backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB should be nil")
-		return err
-	}
-
-	if backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID != nil {
-		err := errors.New("In Init, backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.MarkdownContent, 0)
-	backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr = &tmp
-
-	tmpDB := make(map[uint]*MarkdownContentDB, 0)
-	backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB = &tmpDB
-
-	tmpID := make(map[*models.MarkdownContent]uint, 0)
-	backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID = &tmpID
-
-	backRepoMarkdownContent.db = db
+	id := backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent]
+	markdowncontentDB = backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[id]
 	return
 }
 
@@ -166,7 +146,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseOne(sta
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, markdowncontent := range *backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr {
+	for id, markdowncontent := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr {
 		if _, ok := stage.MarkdownContents[markdowncontent]; !ok {
 			backRepoMarkdownContent.CommitDeleteInstance(id)
 		}
@@ -178,19 +158,20 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseOne(sta
 // BackRepoMarkdownContent.CommitDeleteInstance commits deletion of MarkdownContent to the BackRepo
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	markdowncontent := (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr)[id]
+	markdowncontent := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr[id]
 
 	// markdowncontent is not staged anymore, remove markdowncontentDB
-	markdowncontentDB := (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[id]
-	query := backRepoMarkdownContent.db.Unscoped().Delete(&markdowncontentDB)
-	if query.Error != nil {
-		return query.Error
+	markdowncontentDB := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[id]
+	db, _ := backRepoMarkdownContent.db.Unscoped()
+	_, err := db.Delete(markdowncontentDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID), markdowncontent)
-	delete((*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr), id)
-	delete((*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB), id)
+	delete(backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID, markdowncontent)
+	delete(backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr, id)
+	delete(backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB, id)
 
 	return
 }
@@ -200,7 +181,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitDeleteInstan
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseOneInstance(markdowncontent *models.MarkdownContent) (Error error) {
 
 	// check if the markdowncontent is not commited yet
-	if _, ok := (*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent]; ok {
+	if _, ok := backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent]; ok {
 		return
 	}
 
@@ -208,15 +189,15 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseOneInst
 	var markdowncontentDB MarkdownContentDB
 	markdowncontentDB.CopyBasicFieldsFromMarkdownContent(markdowncontent)
 
-	query := backRepoMarkdownContent.db.Create(&markdowncontentDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoMarkdownContent.db.Create(&markdowncontentDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent] = markdowncontentDB.ID
-	(*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr)[markdowncontentDB.ID] = markdowncontent
-	(*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[markdowncontentDB.ID] = &markdowncontentDB
+	backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent] = markdowncontentDB.ID
+	backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr[markdowncontentDB.ID] = markdowncontent
+	backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[markdowncontentDB.ID] = &markdowncontentDB
 
 	return
 }
@@ -225,7 +206,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseOneInst
 // Phase Two is the update of instance with the field in the database
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, markdowncontent := range *backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr {
+	for idx, markdowncontent := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr {
 		backRepoMarkdownContent.CommitPhaseTwoInstance(backRepo, idx, markdowncontent)
 	}
 
@@ -237,7 +218,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseTwo(bac
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, markdowncontent *models.MarkdownContent) (Error error) {
 
 	// fetch matching markdowncontentDB
-	if markdowncontentDB, ok := (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[idx]; ok {
+	if markdowncontentDB, ok := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[idx]; ok {
 
 		markdowncontentDB.CopyBasicFieldsFromMarkdownContent(markdowncontent)
 
@@ -245,15 +226,18 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseTwoInst
 		// commit pointer value markdowncontent.Root translates to updating the markdowncontent.RootID
 		markdowncontentDB.RootID.Valid = true // allow for a 0 value (nil association)
 		if markdowncontent.Root != nil {
-			if RootId, ok := (*backRepo.BackRepoElement.Map_ElementPtr_ElementDBID)[markdowncontent.Root]; ok {
+			if RootId, ok := backRepo.BackRepoElement.Map_ElementPtr_ElementDBID[markdowncontent.Root]; ok {
 				markdowncontentDB.RootID.Int64 = int64(RootId)
 				markdowncontentDB.RootID.Valid = true
 			}
+		} else {
+			markdowncontentDB.RootID.Int64 = 0
+			markdowncontentDB.RootID.Valid = true
 		}
 
-		query := backRepoMarkdownContent.db.Save(&markdowncontentDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoMarkdownContent.db.Save(markdowncontentDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -268,20 +252,19 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CommitPhaseTwoInst
 // BackRepoMarkdownContent.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOne() (Error error) {
 
 	markdowncontentDBArray := make([]MarkdownContentDB, 0)
-	query := backRepoMarkdownContent.db.Find(&markdowncontentDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoMarkdownContent.db.Find(&markdowncontentDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	markdowncontentInstancesToBeRemovedFromTheStage := make(map[*models.MarkdownContent]any)
-	for key, value := range models.Stage.MarkdownContents {
+	for key, value := range backRepoMarkdownContent.stage.MarkdownContents {
 		markdowncontentInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -291,7 +274,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOne()
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		markdowncontent, ok := (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr)[markdowncontentDB.ID]
+		markdowncontent, ok := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr[markdowncontentDB.ID]
 		if ok {
 			delete(markdowncontentInstancesToBeRemovedFromTheStage, markdowncontent)
 		}
@@ -299,13 +282,13 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOne()
 
 	// remove from stage and back repo's 3 maps all markdowncontents that are not in the checkout
 	for markdowncontent := range markdowncontentInstancesToBeRemovedFromTheStage {
-		markdowncontent.Unstage()
+		markdowncontent.Unstage(backRepoMarkdownContent.GetStage())
 
 		// remove instance from the back repo 3 maps
-		markdowncontentID := (*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent]
-		delete((*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID), markdowncontent)
-		delete((*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB), markdowncontentID)
-		delete((*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr), markdowncontentID)
+		markdowncontentID := backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent]
+		delete(backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID, markdowncontent)
+		delete(backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB, markdowncontentID)
+		delete(backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr, markdowncontentID)
 	}
 
 	return
@@ -315,24 +298,27 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOne()
 // models version of the markdowncontentDB
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOneInstance(markdowncontentDB *MarkdownContentDB) (Error error) {
 
-	markdowncontent, ok := (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr)[markdowncontentDB.ID]
+	markdowncontent, ok := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr[markdowncontentDB.ID]
 	if !ok {
 		markdowncontent = new(models.MarkdownContent)
 
-		(*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr)[markdowncontentDB.ID] = markdowncontent
-		(*backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent] = markdowncontentDB.ID
+		backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr[markdowncontentDB.ID] = markdowncontent
+		backRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent] = markdowncontentDB.ID
 
 		// append model store with the new element
 		markdowncontent.Name = markdowncontentDB.Name_Data.String
-		markdowncontent.Stage()
+		markdowncontent.Stage(backRepoMarkdownContent.GetStage())
 	}
 	markdowncontentDB.CopyBasicFieldsToMarkdownContent(markdowncontent)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	markdowncontent.Stage(backRepoMarkdownContent.GetStage())
 
 	// preserve pointer to markdowncontentDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_MarkdownContentDBID_MarkdownContentDB)[markdowncontentDB hold variable pointers
 	markdowncontentDB_Data := *markdowncontentDB
 	preservedPtrToMarkdownContent := &markdowncontentDB_Data
-	(*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[markdowncontentDB.ID] = preservedPtrToMarkdownContent
+	backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[markdowncontentDB.ID] = preservedPtrToMarkdownContent
 
 	return
 }
@@ -342,7 +328,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseOneIn
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, markdowncontentDB := range *backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
+	for _, markdowncontentDB := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
 		backRepoMarkdownContent.CheckoutPhaseTwoInstance(backRepo, markdowncontentDB)
 	}
 	return
@@ -352,21 +338,42 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseTwo(b
 // Phase Two is the update of instance with the field in the database
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, markdowncontentDB *MarkdownContentDB) (Error error) {
 
-	markdowncontent := (*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr)[markdowncontentDB.ID]
-	_ = markdowncontent // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	markdowncontent := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr[markdowncontentDB.ID]
+
+	markdowncontentDB.DecodePointers(backRepo, markdowncontent)
+
+	return
+}
+
+func (markdowncontentDB *MarkdownContentDB) DecodePointers(backRepo *BackRepoStruct, markdowncontent *models.MarkdownContent) {
 
 	// insertion point for checkout of pointer encoding
-	// Root field
-	if markdowncontentDB.RootID.Int64 != 0 {
-		markdowncontent.Root = (*backRepo.BackRepoElement.Map_ElementDBID_ElementPtr)[uint(markdowncontentDB.RootID.Int64)]
+	// Root field	
+	{
+		id := markdowncontentDB.RootID.Int64
+		if id != 0 {
+			tmp, ok := backRepo.BackRepoElement.Map_ElementDBID_ElementPtr[uint(id)]
+
+			if !ok {
+				log.Fatalln("DecodePointers: markdowncontent.Root, unknown pointer id", id)
+			}
+
+			// updates only if field has changed
+			if markdowncontent.Root == nil || markdowncontent.Root != tmp {
+				markdowncontent.Root = tmp
+			}
+		} else {
+			markdowncontent.Root = nil
+		}
 	}
+	
 	return
 }
 
 // CommitMarkdownContent allows commit of a single markdowncontent (if already staged)
 func (backRepo *BackRepoStruct) CommitMarkdownContent(markdowncontent *models.MarkdownContent) {
 	backRepo.BackRepoMarkdownContent.CommitPhaseOneInstance(markdowncontent)
-	if id, ok := (*backRepo.BackRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent]; ok {
+	if id, ok := backRepo.BackRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent]; ok {
 		backRepo.BackRepoMarkdownContent.CommitPhaseTwoInstance(backRepo, id, markdowncontent)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -375,14 +382,14 @@ func (backRepo *BackRepoStruct) CommitMarkdownContent(markdowncontent *models.Ma
 // CommitMarkdownContent allows checkout of a single markdowncontent (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutMarkdownContent(markdowncontent *models.MarkdownContent) {
 	// check if the markdowncontent is staged
-	if _, ok := (*backRepo.BackRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent]; ok {
+	if _, ok := backRepo.BackRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent]; ok {
 
-		if id, ok := (*backRepo.BackRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID)[markdowncontent]; ok {
+		if id, ok := backRepo.BackRepoMarkdownContent.Map_MarkdownContentPtr_MarkdownContentDBID[markdowncontent]; ok {
 			var markdowncontentDB MarkdownContentDB
 			markdowncontentDB.ID = id
 
-			if err := backRepo.BackRepoMarkdownContent.db.First(&markdowncontentDB, id).Error; err != nil {
-				log.Panicln("CheckoutMarkdownContent : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoMarkdownContent.db.First(&markdowncontentDB, id); err != nil {
+				log.Fatalln("CheckoutMarkdownContent : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoMarkdownContent.CheckoutPhaseOneInstance(&markdowncontentDB)
 			backRepo.BackRepoMarkdownContent.CheckoutPhaseTwoInstance(backRepo, &markdowncontentDB)
@@ -392,6 +399,17 @@ func (backRepo *BackRepoStruct) CheckoutMarkdownContent(markdowncontent *models.
 
 // CopyBasicFieldsFromMarkdownContent
 func (markdowncontentDB *MarkdownContentDB) CopyBasicFieldsFromMarkdownContent(markdowncontent *models.MarkdownContent) {
+	// insertion point for fields commit
+
+	markdowncontentDB.Name_Data.String = markdowncontent.Name
+	markdowncontentDB.Name_Data.Valid = true
+
+	markdowncontentDB.Content_Data.String = markdowncontent.Content
+	markdowncontentDB.Content_Data.Valid = true
+}
+
+// CopyBasicFieldsFromMarkdownContent_WOP
+func (markdowncontentDB *MarkdownContentDB) CopyBasicFieldsFromMarkdownContent_WOP(markdowncontent *models.MarkdownContent_WOP) {
 	// insertion point for fields commit
 
 	markdowncontentDB.Name_Data.String = markdowncontent.Name
@@ -419,6 +437,13 @@ func (markdowncontentDB *MarkdownContentDB) CopyBasicFieldsToMarkdownContent(mar
 	markdowncontent.Content = markdowncontentDB.Content_Data.String
 }
 
+// CopyBasicFieldsToMarkdownContent_WOP
+func (markdowncontentDB *MarkdownContentDB) CopyBasicFieldsToMarkdownContent_WOP(markdowncontent *models.MarkdownContent_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	markdowncontent.Name = markdowncontentDB.Name_Data.String
+	markdowncontent.Content = markdowncontentDB.Content_Data.String
+}
+
 // CopyBasicFieldsToMarkdownContentWOP
 func (markdowncontentDB *MarkdownContentDB) CopyBasicFieldsToMarkdownContentWOP(markdowncontent *MarkdownContentWOP) {
 	markdowncontent.ID = int(markdowncontentDB.ID)
@@ -435,7 +460,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) Backup(dirPath str
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*MarkdownContentDB, 0)
-	for _, markdowncontentDB := range *backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
+	for _, markdowncontentDB := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
 		forBackup = append(forBackup, markdowncontentDB)
 	}
 
@@ -446,12 +471,12 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) Backup(dirPath str
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json MarkdownContent ", filename, " ", err.Error())
+		log.Fatal("Cannot json MarkdownContent ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json MarkdownContent file", err.Error())
+		log.Fatal("Cannot write the json MarkdownContent file", err.Error())
 	}
 }
 
@@ -461,7 +486,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) BackupXL(file *xls
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*MarkdownContentDB, 0)
-	for _, markdowncontentDB := range *backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
+	for _, markdowncontentDB := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
 		forBackup = append(forBackup, markdowncontentDB)
 	}
 
@@ -471,7 +496,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) BackupXL(file *xls
 
 	sh, err := file.AddSheet("MarkdownContent")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -496,13 +521,13 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestoreXLPhaseOne(
 	sh, ok := file.Sheet["MarkdownContent"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoMarkdownContent.rowVisitorMarkdownContent)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -522,11 +547,11 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) rowVisitorMarkdown
 
 		markdowncontentDB_ID_atBackupTime := markdowncontentDB.ID
 		markdowncontentDB.ID = 0
-		query := backRepoMarkdownContent.db.Create(markdowncontentDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoMarkdownContent.db.Create(markdowncontentDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[markdowncontentDB.ID] = markdowncontentDB
+		backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[markdowncontentDB.ID] = markdowncontentDB
 		BackRepoMarkdownContentid_atBckpTime_newID[markdowncontentDB_ID_atBackupTime] = markdowncontentDB.ID
 	}
 	return nil
@@ -544,7 +569,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestorePhaseOne(di
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json MarkdownContent file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json MarkdownContent file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -559,16 +584,16 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestorePhaseOne(di
 
 		markdowncontentDB_ID_atBackupTime := markdowncontentDB.ID
 		markdowncontentDB.ID = 0
-		query := backRepoMarkdownContent.db.Create(markdowncontentDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoMarkdownContent.db.Create(markdowncontentDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB)[markdowncontentDB.ID] = markdowncontentDB
+		backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[markdowncontentDB.ID] = markdowncontentDB
 		BackRepoMarkdownContentid_atBckpTime_newID[markdowncontentDB_ID_atBackupTime] = markdowncontentDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json MarkdownContent file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json MarkdownContent file", err.Error())
 	}
 }
 
@@ -576,7 +601,7 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestorePhaseOne(di
 // to compute new index
 func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestorePhaseTwo() {
 
-	for _, markdowncontentDB := range *backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
+	for _, markdowncontentDB := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = markdowncontentDB
@@ -589,12 +614,37 @@ func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) RestorePhaseTwo() 
 		}
 
 		// update databse with new index encoding
-		query := backRepoMarkdownContent.db.Model(markdowncontentDB).Updates(*markdowncontentDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoMarkdownContent.db.Model(markdowncontentDB)
+		_, err := db.Updates(*markdowncontentDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoMarkdownContent.ResetReversePointers commits all staged instances of MarkdownContent to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, markdowncontent := range backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentPtr {
+		backRepoMarkdownContent.ResetReversePointersInstance(backRepo, idx, markdowncontent)
+	}
+
+	return
+}
+
+func (backRepoMarkdownContent *BackRepoMarkdownContentStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, markdowncontent *models.MarkdownContent) (Error error) {
+
+	// fetch matching markdowncontentDB
+	if markdowncontentDB, ok := backRepoMarkdownContent.Map_MarkdownContentDBID_MarkdownContentDB[idx]; ok {
+		_ = markdowncontentDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

@@ -1,12 +1,18 @@
+// generated code - do not edit
 package controllers
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
+	"time"
+
+	"github.com/fullstack-lang/gongmarkdown/go/orm"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/fullstack-lang/gongmarkdown/go/orm"
+	"github.com/gorilla/websocket"
 )
 
 // genQuery return the name of the column
@@ -39,67 +45,217 @@ type ValidationError struct {
 	} `json:"body"`
 }
 
-// RegisterControllers register controllers
-func RegisterControllers(r *gin.Engine) {
+// registerControllers register controllers
+func registerControllers(r *gin.Engine) {
 	v1 := r.Group("/api/github.com/fullstack-lang/gongmarkdown/go")
 	{ // insertion point for registrations
-		v1.GET("/v1/anotherdummydatas", GetAnotherDummyDatas)
-		v1.GET("/v1/anotherdummydatas/:id", GetAnotherDummyData)
-		v1.POST("/v1/anotherdummydatas", PostAnotherDummyData)
-		v1.PATCH("/v1/anotherdummydatas/:id", UpdateAnotherDummyData)
-		v1.PUT("/v1/anotherdummydatas/:id", UpdateAnotherDummyData)
-		v1.DELETE("/v1/anotherdummydatas/:id", DeleteAnotherDummyData)
+		v1.GET("/v1/anotherdummydatas", GetController().GetAnotherDummyDatas)
+		v1.GET("/v1/anotherdummydatas/:id", GetController().GetAnotherDummyData)
+		v1.POST("/v1/anotherdummydatas", GetController().PostAnotherDummyData)
+		v1.PATCH("/v1/anotherdummydatas/:id", GetController().UpdateAnotherDummyData)
+		v1.PUT("/v1/anotherdummydatas/:id", GetController().UpdateAnotherDummyData)
+		v1.DELETE("/v1/anotherdummydatas/:id", GetController().DeleteAnotherDummyData)
 
-		v1.GET("/v1/cells", GetCells)
-		v1.GET("/v1/cells/:id", GetCell)
-		v1.POST("/v1/cells", PostCell)
-		v1.PATCH("/v1/cells/:id", UpdateCell)
-		v1.PUT("/v1/cells/:id", UpdateCell)
-		v1.DELETE("/v1/cells/:id", DeleteCell)
+		v1.GET("/v1/cells", GetController().GetCells)
+		v1.GET("/v1/cells/:id", GetController().GetCell)
+		v1.POST("/v1/cells", GetController().PostCell)
+		v1.PATCH("/v1/cells/:id", GetController().UpdateCell)
+		v1.PUT("/v1/cells/:id", GetController().UpdateCell)
+		v1.DELETE("/v1/cells/:id", GetController().DeleteCell)
 
-		v1.GET("/v1/dummydatas", GetDummyDatas)
-		v1.GET("/v1/dummydatas/:id", GetDummyData)
-		v1.POST("/v1/dummydatas", PostDummyData)
-		v1.PATCH("/v1/dummydatas/:id", UpdateDummyData)
-		v1.PUT("/v1/dummydatas/:id", UpdateDummyData)
-		v1.DELETE("/v1/dummydatas/:id", DeleteDummyData)
+		v1.GET("/v1/dummydatas", GetController().GetDummyDatas)
+		v1.GET("/v1/dummydatas/:id", GetController().GetDummyData)
+		v1.POST("/v1/dummydatas", GetController().PostDummyData)
+		v1.PATCH("/v1/dummydatas/:id", GetController().UpdateDummyData)
+		v1.PUT("/v1/dummydatas/:id", GetController().UpdateDummyData)
+		v1.DELETE("/v1/dummydatas/:id", GetController().DeleteDummyData)
 
-		v1.GET("/v1/elements", GetElements)
-		v1.GET("/v1/elements/:id", GetElement)
-		v1.POST("/v1/elements", PostElement)
-		v1.PATCH("/v1/elements/:id", UpdateElement)
-		v1.PUT("/v1/elements/:id", UpdateElement)
-		v1.DELETE("/v1/elements/:id", DeleteElement)
+		v1.GET("/v1/elements", GetController().GetElements)
+		v1.GET("/v1/elements/:id", GetController().GetElement)
+		v1.POST("/v1/elements", GetController().PostElement)
+		v1.PATCH("/v1/elements/:id", GetController().UpdateElement)
+		v1.PUT("/v1/elements/:id", GetController().UpdateElement)
+		v1.DELETE("/v1/elements/:id", GetController().DeleteElement)
 
-		v1.GET("/v1/markdowncontents", GetMarkdownContents)
-		v1.GET("/v1/markdowncontents/:id", GetMarkdownContent)
-		v1.POST("/v1/markdowncontents", PostMarkdownContent)
-		v1.PATCH("/v1/markdowncontents/:id", UpdateMarkdownContent)
-		v1.PUT("/v1/markdowncontents/:id", UpdateMarkdownContent)
-		v1.DELETE("/v1/markdowncontents/:id", DeleteMarkdownContent)
+		v1.GET("/v1/markdowncontents", GetController().GetMarkdownContents)
+		v1.GET("/v1/markdowncontents/:id", GetController().GetMarkdownContent)
+		v1.POST("/v1/markdowncontents", GetController().PostMarkdownContent)
+		v1.PATCH("/v1/markdowncontents/:id", GetController().UpdateMarkdownContent)
+		v1.PUT("/v1/markdowncontents/:id", GetController().UpdateMarkdownContent)
+		v1.DELETE("/v1/markdowncontents/:id", GetController().DeleteMarkdownContent)
 
-		v1.GET("/v1/rows", GetRows)
-		v1.GET("/v1/rows/:id", GetRow)
-		v1.POST("/v1/rows", PostRow)
-		v1.PATCH("/v1/rows/:id", UpdateRow)
-		v1.PUT("/v1/rows/:id", UpdateRow)
-		v1.DELETE("/v1/rows/:id", DeleteRow)
+		v1.GET("/v1/rows", GetController().GetRows)
+		v1.GET("/v1/rows/:id", GetController().GetRow)
+		v1.POST("/v1/rows", GetController().PostRow)
+		v1.PATCH("/v1/rows/:id", GetController().UpdateRow)
+		v1.PUT("/v1/rows/:id", GetController().UpdateRow)
+		v1.DELETE("/v1/rows/:id", GetController().DeleteRow)
 
-		v1.GET("/commitfrombacknb", GetLastCommitFromBackNb)
-		v1.GET("/pushfromfrontnb", GetLastPushFromFrontNb)
+		v1.GET("/v1/commitfrombacknb", GetController().GetLastCommitFromBackNb)
+		v1.GET("/v1/pushfromfrontnb", GetController().GetLastPushFromFrontNb)
+
+		v1.GET("/v1/ws/stage", GetController().onWebSocketRequestForBackRepoContent)
+
+		v1.GET("/v1/stacks", GetController().stacks)
+	}
+}
+
+func (controller *Controller) stacks(c *gin.Context) {
+
+	var res []string
+
+	for k := range controller.Map_BackRepos {
+		res = append(res, k)
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// onWebSocketRequestForBackRepoContent is a function that is started each time
+// a web socket request is received
+//
+// 1. upgrade the incomming web connection to a web socket
+// 1. it subscribe to the backend commit number broadcaster
+// 1. it stays live and pool for incomming backend commit number broadcast and forward
+// them on the web socket connection
+func (controller *Controller) onWebSocketRequestForBackRepoContent(c *gin.Context) {
+
+	// log.Println("Stack github.com/fullstack-lang/gongmarkdown/go, onWebSocketRequestForBackRepoContent")
+
+	// Upgrader specifies parameters for upgrading an HTTP connection to a
+	// WebSocket connection.
+	var upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			return origin == "http://localhost:8080" || origin == "http://localhost:4200"
+		},
+	}
+
+	wsConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer wsConnection.Close()
+
+	// Create a context that is canceled when the connection is closed
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	defer cancel()
+
+	values := c.Request.URL.Query()
+	stackPath := ""
+	if len(values) == 1 {
+		value := values["GONG__StackPath"]
+		if len(value) == 1 {
+			stackPath = value[0]
+			// log.Println("GetLastCommitFromBackNb", "GONG__StackPath", stackPath)
+		}
+	}
+
+	log.Printf("Stack github.com/fullstack-lang/gongmarkdown/go: stack path: '%s', new ws index %d",
+		stackPath, controller.listenerIndex,
+	)
+	index := controller.listenerIndex
+	controller.listenerIndex++
+
+	backRepo := controller.Map_BackRepos[stackPath]
+	if backRepo == nil {
+		log.Panic("Stack github.com/fullstack-lang/gongmarkdown/go, Unkown stack", stackPath)
+	}
+	updateCommitBackRepoNbChannel := backRepo.SubscribeToCommitNb(ctx)
+
+	// Start a goroutine to read from the WebSocket to detect disconnection
+	go func() {
+		for {
+			// ReadMessage is used to detect client disconnection
+			_, _, err := wsConnection.ReadMessage()
+			if err != nil {
+				log.Println("github.com/fullstack-lang/gongmarkdown/go", stackPath, "WS client disconnected:", err)
+				cancel() // Cancel the context
+				return
+			}
+		}
+	}()
+
+	backRepoData := new(orm.BackRepoData)
+	orm.CopyBackRepoToBackRepoData(backRepo, backRepoData)
+
+	err = wsConnection.WriteJSON(backRepoData)
+	if err != nil {
+		log.Println("github.com/fullstack-lang/gongmarkdown/go:\n",
+			"client no longer receiver web socket message, assuming it is no longer alive, closing websocket handler")
+		fmt.Println(err)
+		return
+	} else {
+		log.Println(time.Now().Format("2006-01-02 15:04:05.000000"), "github.com/fullstack-lang/gongmarkdown/go: 1st sent backRepoData of stack:", stackPath, "index", index)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			// Context canceled, exit the loop
+			return
+		default:
+			for nbCommitBackRepo := range updateCommitBackRepoNbChannel {
+				_ = nbCommitBackRepo
+
+				backRepoData := new(orm.BackRepoData)
+				orm.CopyBackRepoToBackRepoData(backRepo, backRepoData)
+
+				// Set write deadline to prevent blocking indefinitely
+				wsConnection.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+				// Send backRepo data
+				err = wsConnection.WriteJSON(backRepoData)
+				if err != nil {
+					log.Println("github.com/fullstack-lang/gongmarkdown/go:\n", stackPath,
+						"client no longer receiver web socket message,closing websocket handler")
+					fmt.Println(err)
+					cancel() // Cancel the context
+					return
+				} else {
+					log.Println(time.Now().Format("2006-01-02 15:04:05.000000"), "github.com/fullstack-lang/gongmarkdown/go: sent backRepoData of stack:", stackPath, "index", index)
+				}
+			}
+		}
 	}
 }
 
 // swagger:route GET /commitfrombacknb backrepo GetLastCommitFromBackNb
-func GetLastCommitFromBackNb(c *gin.Context) {
-	res := orm.GetLastCommitFromBackNb()
+func (controller *Controller) GetLastCommitFromBackNb(c *gin.Context) {
+	values := c.Request.URL.Query()
+	stackPath := ""
+	if len(values) == 1 {
+		value := values["GONG__StackPath"]
+		if len(value) == 1 {
+			stackPath = value[0]
+			// log.Println("GetLastCommitFromBackNb", "GONG__StackPath", stackPath)
+		}
+	}
+	backRepo := controller.Map_BackRepos[stackPath]
+	if backRepo == nil {
+		log.Panic("Stack github.com/fullstack-lang/gongmarkdown/go/models, Unkown stack", stackPath)
+	}
+	res := backRepo.GetLastCommitFromBackNb()
 
 	c.JSON(http.StatusOK, res)
 }
 
 // swagger:route GET /pushfromfrontnb backrepo GetLastPushFromFrontNb
-func GetLastPushFromFrontNb(c *gin.Context) {
-	res := orm.GetLastPushFromFrontNb()
+func (controller *Controller) GetLastPushFromFrontNb(c *gin.Context) {
+	values := c.Request.URL.Query()
+	stackPath := ""
+	if len(values) == 1 {
+		value := values["GONG__StackPath"]
+		if len(value) == 1 {
+			stackPath = value[0]
+			// log.Println("GetLastPushFromFrontNb", "GONG__StackPath", stackPath)
+		}
+	}
+	backRepo := controller.Map_BackRepos[stackPath]
+	if backRepo == nil {
+		log.Panic("Stack github.com/fullstack-lang/gongmarkdown/go/models, Unkown stack", stackPath)
+	}
+	res := backRepo.GetLastPushFromFrontNb()
 
 	c.JSON(http.StatusOK, res)
 }

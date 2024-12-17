@@ -595,7 +595,7 @@ func emitStructAsXML(v reflect.Value, name, xmlNS string) (xmlwriter.Elem, error
 				Name:  "xmlns",
 				Value: xmlNS,
 			})
-		case "SheetData", "MergeCells", "DataValidations":
+		case "SheetData", "MergeCells", "DataValidations", "AutoFilter":
 			// Skip SheetData here, we explicitly generate this in writeXML below
 			// Microsoft Excel considers a mergeCells element before a sheetData element to be
 			// an error and will fail to open the document, so we'll be back with this data
@@ -717,7 +717,7 @@ func (worksheet *xlsxWorksheet) makeXlsxRowFromRow(row *Row, styles *xlsxStyleSh
 		xRow.C = append(xRow.C, xC)
 
 		return nil
-	})
+	}, SkipEmptyCells)
 
 	return xRow, err
 }
@@ -760,14 +760,27 @@ func (worksheet *xlsxWorksheet) WriteXML(xw *xmlwriter.Writer, s *Sheet, styles 
 				if err != nil {
 					return err
 				}
-				return xw.Write(mergeCells)
+				if err := xw.Write(mergeCells); err != nil {
+					return err
+				}
 			}
 			if worksheet.DataValidations != nil {
 				dataValidation, err := emitStructAsXML(reflect.ValueOf(worksheet.DataValidations), "dataValidations", "")
 				if err != nil {
 					return err
 				}
-				return xw.Write(dataValidation)
+				if err := xw.Write(dataValidation); err != nil {
+					return err
+				}
+			}
+			if worksheet.AutoFilter != nil {
+				autoFilter, err := emitStructAsXML(reflect.ValueOf(worksheet.AutoFilter), "autoFilter", "")
+				if err != nil {
+					return err
+				}
+				if err := xw.Write(autoFilter); err != nil {
+					return err
+				}
 			}
 			return nil
 		}(),

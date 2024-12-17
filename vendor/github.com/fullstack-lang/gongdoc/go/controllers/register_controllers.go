@@ -1,12 +1,18 @@
+// generated code - do not edit
 package controllers
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
+	"time"
+
+	"github.com/fullstack-lang/gongdoc/go/orm"
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/fullstack-lang/gongdoc/go/orm"
+	"github.com/gorilla/websocket"
 )
 
 // genQuery return the name of the column
@@ -39,116 +45,266 @@ type ValidationError struct {
 	} `json:"body"`
 }
 
-// RegisterControllers register controllers
-func RegisterControllers(r *gin.Engine) {
+// registerControllers register controllers
+func registerControllers(r *gin.Engine) {
 	v1 := r.Group("/api/github.com/fullstack-lang/gongdoc/go")
 	{ // insertion point for registrations
-		v1.GET("/v1/classdiagrams", GetClassdiagrams)
-		v1.GET("/v1/classdiagrams/:id", GetClassdiagram)
-		v1.POST("/v1/classdiagrams", PostClassdiagram)
-		v1.PATCH("/v1/classdiagrams/:id", UpdateClassdiagram)
-		v1.PUT("/v1/classdiagrams/:id", UpdateClassdiagram)
-		v1.DELETE("/v1/classdiagrams/:id", DeleteClassdiagram)
+		v1.GET("/v1/classdiagrams", GetController().GetClassdiagrams)
+		v1.GET("/v1/classdiagrams/:id", GetController().GetClassdiagram)
+		v1.POST("/v1/classdiagrams", GetController().PostClassdiagram)
+		v1.PATCH("/v1/classdiagrams/:id", GetController().UpdateClassdiagram)
+		v1.PUT("/v1/classdiagrams/:id", GetController().UpdateClassdiagram)
+		v1.DELETE("/v1/classdiagrams/:id", GetController().DeleteClassdiagram)
 
-		v1.GET("/v1/classshapes", GetClassshapes)
-		v1.GET("/v1/classshapes/:id", GetClassshape)
-		v1.POST("/v1/classshapes", PostClassshape)
-		v1.PATCH("/v1/classshapes/:id", UpdateClassshape)
-		v1.PUT("/v1/classshapes/:id", UpdateClassshape)
-		v1.DELETE("/v1/classshapes/:id", DeleteClassshape)
+		v1.GET("/v1/diagrampackages", GetController().GetDiagramPackages)
+		v1.GET("/v1/diagrampackages/:id", GetController().GetDiagramPackage)
+		v1.POST("/v1/diagrampackages", GetController().PostDiagramPackage)
+		v1.PATCH("/v1/diagrampackages/:id", GetController().UpdateDiagramPackage)
+		v1.PUT("/v1/diagrampackages/:id", GetController().UpdateDiagramPackage)
+		v1.DELETE("/v1/diagrampackages/:id", GetController().DeleteDiagramPackage)
 
-		v1.GET("/v1/diagrampackages", GetDiagramPackages)
-		v1.GET("/v1/diagrampackages/:id", GetDiagramPackage)
-		v1.POST("/v1/diagrampackages", PostDiagramPackage)
-		v1.PATCH("/v1/diagrampackages/:id", UpdateDiagramPackage)
-		v1.PUT("/v1/diagrampackages/:id", UpdateDiagramPackage)
-		v1.DELETE("/v1/diagrampackages/:id", DeleteDiagramPackage)
+		v1.GET("/v1/fields", GetController().GetFields)
+		v1.GET("/v1/fields/:id", GetController().GetField)
+		v1.POST("/v1/fields", GetController().PostField)
+		v1.PATCH("/v1/fields/:id", GetController().UpdateField)
+		v1.PUT("/v1/fields/:id", GetController().UpdateField)
+		v1.DELETE("/v1/fields/:id", GetController().DeleteField)
 
-		v1.GET("/v1/fields", GetFields)
-		v1.GET("/v1/fields/:id", GetField)
-		v1.POST("/v1/fields", PostField)
-		v1.PATCH("/v1/fields/:id", UpdateField)
-		v1.PUT("/v1/fields/:id", UpdateField)
-		v1.DELETE("/v1/fields/:id", DeleteField)
+		v1.GET("/v1/gongenumshapes", GetController().GetGongEnumShapes)
+		v1.GET("/v1/gongenumshapes/:id", GetController().GetGongEnumShape)
+		v1.POST("/v1/gongenumshapes", GetController().PostGongEnumShape)
+		v1.PATCH("/v1/gongenumshapes/:id", GetController().UpdateGongEnumShape)
+		v1.PUT("/v1/gongenumshapes/:id", GetController().UpdateGongEnumShape)
+		v1.DELETE("/v1/gongenumshapes/:id", GetController().DeleteGongEnumShape)
 
-		v1.GET("/v1/links", GetLinks)
-		v1.GET("/v1/links/:id", GetLink)
-		v1.POST("/v1/links", PostLink)
-		v1.PATCH("/v1/links/:id", UpdateLink)
-		v1.PUT("/v1/links/:id", UpdateLink)
-		v1.DELETE("/v1/links/:id", DeleteLink)
+		v1.GET("/v1/gongenumvalueentrys", GetController().GetGongEnumValueEntrys)
+		v1.GET("/v1/gongenumvalueentrys/:id", GetController().GetGongEnumValueEntry)
+		v1.POST("/v1/gongenumvalueentrys", GetController().PostGongEnumValueEntry)
+		v1.PATCH("/v1/gongenumvalueentrys/:id", GetController().UpdateGongEnumValueEntry)
+		v1.PUT("/v1/gongenumvalueentrys/:id", GetController().UpdateGongEnumValueEntry)
+		v1.DELETE("/v1/gongenumvalueentrys/:id", GetController().DeleteGongEnumValueEntry)
 
-		v1.GET("/v1/nodes", GetNodes)
-		v1.GET("/v1/nodes/:id", GetNode)
-		v1.POST("/v1/nodes", PostNode)
-		v1.PATCH("/v1/nodes/:id", UpdateNode)
-		v1.PUT("/v1/nodes/:id", UpdateNode)
-		v1.DELETE("/v1/nodes/:id", DeleteNode)
+		v1.GET("/v1/gongstructshapes", GetController().GetGongStructShapes)
+		v1.GET("/v1/gongstructshapes/:id", GetController().GetGongStructShape)
+		v1.POST("/v1/gongstructshapes", GetController().PostGongStructShape)
+		v1.PATCH("/v1/gongstructshapes/:id", GetController().UpdateGongStructShape)
+		v1.PUT("/v1/gongstructshapes/:id", GetController().UpdateGongStructShape)
+		v1.DELETE("/v1/gongstructshapes/:id", GetController().DeleteGongStructShape)
 
-		v1.GET("/v1/noteshapes", GetNoteShapes)
-		v1.GET("/v1/noteshapes/:id", GetNoteShape)
-		v1.POST("/v1/noteshapes", PostNoteShape)
-		v1.PATCH("/v1/noteshapes/:id", UpdateNoteShape)
-		v1.PUT("/v1/noteshapes/:id", UpdateNoteShape)
-		v1.DELETE("/v1/noteshapes/:id", DeleteNoteShape)
+		v1.GET("/v1/links", GetController().GetLinks)
+		v1.GET("/v1/links/:id", GetController().GetLink)
+		v1.POST("/v1/links", GetController().PostLink)
+		v1.PATCH("/v1/links/:id", GetController().UpdateLink)
+		v1.PUT("/v1/links/:id", GetController().UpdateLink)
+		v1.DELETE("/v1/links/:id", GetController().DeleteLink)
 
-		v1.GET("/v1/positions", GetPositions)
-		v1.GET("/v1/positions/:id", GetPosition)
-		v1.POST("/v1/positions", PostPosition)
-		v1.PATCH("/v1/positions/:id", UpdatePosition)
-		v1.PUT("/v1/positions/:id", UpdatePosition)
-		v1.DELETE("/v1/positions/:id", DeletePosition)
+		v1.GET("/v1/noteshapes", GetController().GetNoteShapes)
+		v1.GET("/v1/noteshapes/:id", GetController().GetNoteShape)
+		v1.POST("/v1/noteshapes", GetController().PostNoteShape)
+		v1.PATCH("/v1/noteshapes/:id", GetController().UpdateNoteShape)
+		v1.PUT("/v1/noteshapes/:id", GetController().UpdateNoteShape)
+		v1.DELETE("/v1/noteshapes/:id", GetController().DeleteNoteShape)
 
-		v1.GET("/v1/references", GetReferences)
-		v1.GET("/v1/references/:id", GetReference)
-		v1.POST("/v1/references", PostReference)
-		v1.PATCH("/v1/references/:id", UpdateReference)
-		v1.PUT("/v1/references/:id", UpdateReference)
-		v1.DELETE("/v1/references/:id", DeleteReference)
+		v1.GET("/v1/noteshapelinks", GetController().GetNoteShapeLinks)
+		v1.GET("/v1/noteshapelinks/:id", GetController().GetNoteShapeLink)
+		v1.POST("/v1/noteshapelinks", GetController().PostNoteShapeLink)
+		v1.PATCH("/v1/noteshapelinks/:id", GetController().UpdateNoteShapeLink)
+		v1.PUT("/v1/noteshapelinks/:id", GetController().UpdateNoteShapeLink)
+		v1.DELETE("/v1/noteshapelinks/:id", GetController().DeleteNoteShapeLink)
 
-		v1.GET("/v1/trees", GetTrees)
-		v1.GET("/v1/trees/:id", GetTree)
-		v1.POST("/v1/trees", PostTree)
-		v1.PATCH("/v1/trees/:id", UpdateTree)
-		v1.PUT("/v1/trees/:id", UpdateTree)
-		v1.DELETE("/v1/trees/:id", DeleteTree)
+		v1.GET("/v1/positions", GetController().GetPositions)
+		v1.GET("/v1/positions/:id", GetController().GetPosition)
+		v1.POST("/v1/positions", GetController().PostPosition)
+		v1.PATCH("/v1/positions/:id", GetController().UpdatePosition)
+		v1.PUT("/v1/positions/:id", GetController().UpdatePosition)
+		v1.DELETE("/v1/positions/:id", GetController().DeletePosition)
 
-		v1.GET("/v1/umlstates", GetUmlStates)
-		v1.GET("/v1/umlstates/:id", GetUmlState)
-		v1.POST("/v1/umlstates", PostUmlState)
-		v1.PATCH("/v1/umlstates/:id", UpdateUmlState)
-		v1.PUT("/v1/umlstates/:id", UpdateUmlState)
-		v1.DELETE("/v1/umlstates/:id", DeleteUmlState)
+		v1.GET("/v1/umlstates", GetController().GetUmlStates)
+		v1.GET("/v1/umlstates/:id", GetController().GetUmlState)
+		v1.POST("/v1/umlstates", GetController().PostUmlState)
+		v1.PATCH("/v1/umlstates/:id", GetController().UpdateUmlState)
+		v1.PUT("/v1/umlstates/:id", GetController().UpdateUmlState)
+		v1.DELETE("/v1/umlstates/:id", GetController().DeleteUmlState)
 
-		v1.GET("/v1/umlscs", GetUmlscs)
-		v1.GET("/v1/umlscs/:id", GetUmlsc)
-		v1.POST("/v1/umlscs", PostUmlsc)
-		v1.PATCH("/v1/umlscs/:id", UpdateUmlsc)
-		v1.PUT("/v1/umlscs/:id", UpdateUmlsc)
-		v1.DELETE("/v1/umlscs/:id", DeleteUmlsc)
+		v1.GET("/v1/umlscs", GetController().GetUmlscs)
+		v1.GET("/v1/umlscs/:id", GetController().GetUmlsc)
+		v1.POST("/v1/umlscs", GetController().PostUmlsc)
+		v1.PATCH("/v1/umlscs/:id", GetController().UpdateUmlsc)
+		v1.PUT("/v1/umlscs/:id", GetController().UpdateUmlsc)
+		v1.DELETE("/v1/umlscs/:id", GetController().DeleteUmlsc)
 
-		v1.GET("/v1/vertices", GetVertices)
-		v1.GET("/v1/vertices/:id", GetVertice)
-		v1.POST("/v1/vertices", PostVertice)
-		v1.PATCH("/v1/vertices/:id", UpdateVertice)
-		v1.PUT("/v1/vertices/:id", UpdateVertice)
-		v1.DELETE("/v1/vertices/:id", DeleteVertice)
+		v1.GET("/v1/vertices", GetController().GetVertices)
+		v1.GET("/v1/vertices/:id", GetController().GetVertice)
+		v1.POST("/v1/vertices", GetController().PostVertice)
+		v1.PATCH("/v1/vertices/:id", GetController().UpdateVertice)
+		v1.PUT("/v1/vertices/:id", GetController().UpdateVertice)
+		v1.DELETE("/v1/vertices/:id", GetController().DeleteVertice)
 
-		v1.GET("/commitfrombacknb", GetLastCommitFromBackNb)
-		v1.GET("/pushfromfrontnb", GetLastPushFromFrontNb)
+		v1.GET("/v1/commitfrombacknb", GetController().GetLastCommitFromBackNb)
+		v1.GET("/v1/pushfromfrontnb", GetController().GetLastPushFromFrontNb)
+
+		v1.GET("/v1/ws/stage", GetController().onWebSocketRequestForBackRepoContent)
+
+		v1.GET("/v1/stacks", GetController().stacks)
+	}
+}
+
+func (controller *Controller) stacks(c *gin.Context) {
+
+	var res []string
+
+	for k := range controller.Map_BackRepos {
+		res = append(res, k)
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
+// onWebSocketRequestForBackRepoContent is a function that is started each time
+// a web socket request is received
+//
+// 1. upgrade the incomming web connection to a web socket
+// 1. it subscribe to the backend commit number broadcaster
+// 1. it stays live and pool for incomming backend commit number broadcast and forward
+// them on the web socket connection
+func (controller *Controller) onWebSocketRequestForBackRepoContent(c *gin.Context) {
+
+	// log.Println("Stack github.com/fullstack-lang/gongdoc/go, onWebSocketRequestForBackRepoContent")
+
+	// Upgrader specifies parameters for upgrading an HTTP connection to a
+	// WebSocket connection.
+	var upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			return origin == "http://localhost:8080" || origin == "http://localhost:4200"
+		},
+	}
+
+	wsConnection, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer wsConnection.Close()
+
+	// Create a context that is canceled when the connection is closed
+	ctx, cancel := context.WithCancel(c.Request.Context())
+	defer cancel()
+
+	values := c.Request.URL.Query()
+	stackPath := ""
+	if len(values) == 1 {
+		value := values["GONG__StackPath"]
+		if len(value) == 1 {
+			stackPath = value[0]
+			// log.Println("GetLastCommitFromBackNb", "GONG__StackPath", stackPath)
+		}
+	}
+
+	log.Printf("Stack github.com/fullstack-lang/gongdoc/go: stack path: '%s', new ws index %d",
+		stackPath, controller.listenerIndex,
+	)
+	index := controller.listenerIndex
+	controller.listenerIndex++
+
+	backRepo := controller.Map_BackRepos[stackPath]
+	if backRepo == nil {
+		log.Panic("Stack github.com/fullstack-lang/gongdoc/go, Unkown stack", stackPath)
+	}
+	updateCommitBackRepoNbChannel := backRepo.SubscribeToCommitNb(ctx)
+
+	// Start a goroutine to read from the WebSocket to detect disconnection
+	go func() {
+		for {
+			// ReadMessage is used to detect client disconnection
+			_, _, err := wsConnection.ReadMessage()
+			if err != nil {
+				log.Println("github.com/fullstack-lang/gongdoc/go", stackPath, "WS client disconnected:", err)
+				cancel() // Cancel the context
+				return
+			}
+		}
+	}()
+
+	backRepoData := new(orm.BackRepoData)
+	orm.CopyBackRepoToBackRepoData(backRepo, backRepoData)
+
+	err = wsConnection.WriteJSON(backRepoData)
+	if err != nil {
+		log.Println("github.com/fullstack-lang/gongdoc/go:\n",
+			"client no longer receiver web socket message, assuming it is no longer alive, closing websocket handler")
+		fmt.Println(err)
+		return
+	} else {
+		log.Println(time.Now().Format("2006-01-02 15:04:05.000000"), "github.com/fullstack-lang/gongdoc/go: 1st sent backRepoData of stack:", stackPath, "index", index)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			// Context canceled, exit the loop
+			return
+		default:
+			for nbCommitBackRepo := range updateCommitBackRepoNbChannel {
+				_ = nbCommitBackRepo
+
+				backRepoData := new(orm.BackRepoData)
+				orm.CopyBackRepoToBackRepoData(backRepo, backRepoData)
+
+				// Set write deadline to prevent blocking indefinitely
+				wsConnection.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+				// Send backRepo data
+				err = wsConnection.WriteJSON(backRepoData)
+				if err != nil {
+					log.Println("github.com/fullstack-lang/gongdoc/go:\n", stackPath,
+						"client no longer receiver web socket message,closing websocket handler")
+					fmt.Println(err)
+					cancel() // Cancel the context
+					return
+				} else {
+					log.Println(time.Now().Format("2006-01-02 15:04:05.000000"), "github.com/fullstack-lang/gongdoc/go: sent backRepoData of stack:", stackPath, "index", index)
+				}
+			}
+		}
 	}
 }
 
 // swagger:route GET /commitfrombacknb backrepo GetLastCommitFromBackNb
-func GetLastCommitFromBackNb(c *gin.Context) {
-	res := orm.GetLastCommitFromBackNb()
+func (controller *Controller) GetLastCommitFromBackNb(c *gin.Context) {
+	values := c.Request.URL.Query()
+	stackPath := ""
+	if len(values) == 1 {
+		value := values["GONG__StackPath"]
+		if len(value) == 1 {
+			stackPath = value[0]
+			// log.Println("GetLastCommitFromBackNb", "GONG__StackPath", stackPath)
+		}
+	}
+	backRepo := controller.Map_BackRepos[stackPath]
+	if backRepo == nil {
+		log.Panic("Stack github.com/fullstack-lang/gongdoc/go/models, Unkown stack", stackPath)
+	}
+	res := backRepo.GetLastCommitFromBackNb()
 
 	c.JSON(http.StatusOK, res)
 }
 
 // swagger:route GET /pushfromfrontnb backrepo GetLastPushFromFrontNb
-func GetLastPushFromFrontNb(c *gin.Context) {
-	res := orm.GetLastPushFromFrontNb()
+func (controller *Controller) GetLastPushFromFrontNb(c *gin.Context) {
+	values := c.Request.URL.Query()
+	stackPath := ""
+	if len(values) == 1 {
+		value := values["GONG__StackPath"]
+		if len(value) == 1 {
+			stackPath = value[0]
+			// log.Println("GetLastPushFromFrontNb", "GONG__StackPath", stackPath)
+		}
+	}
+	backRepo := controller.Map_BackRepos[stackPath]
+	if backRepo == nil {
+		log.Panic("Stack github.com/fullstack-lang/gongdoc/go/models, Unkown stack", stackPath)
+	}
+	res := backRepo.GetLastPushFromFrontNb()
 
 	c.JSON(http.StatusOK, res)
 }

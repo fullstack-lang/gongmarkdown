@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongdoc/go/db"
 	"github.com/fullstack-lang/gongdoc/go/models"
 )
 
@@ -35,22 +36,17 @@ var dummy_Field_sort sort.Float64Slice
 type FieldAPI struct {
 	gorm.Model
 
-	models.Field
+	models.Field_WOP
 
 	// encoding of pointers
-	FieldPointersEnconding
+	// for API, it cannot be embedded
+	FieldPointersEncoding FieldPointersEncoding
 }
 
-// FieldPointersEnconding encodes pointers to Struct and
+// FieldPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type FieldPointersEnconding struct {
+type FieldPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
-
-	// Implementation of a reverse ID for field Classshape{}.Fields []*Field
-	Classshape_FieldsDBID sql.NullInt64
-
-	// implementation of the index of the withing the slice
-	Classshape_FieldsDBID_Index sql.NullInt64
 }
 
 // FieldDB describes a field in the database
@@ -67,8 +63,8 @@ type FieldDB struct {
 	// Declation for basic field fieldDB.Name
 	Name_Data sql.NullString
 
-	// Declation for basic field fieldDB.Fieldname
-	Fieldname_Data sql.NullString
+	// Declation for basic field fieldDB.Identifier
+	Identifier_Data sql.NullString
 
 	// Declation for basic field fieldDB.FieldTypeAsString
 	FieldTypeAsString_Data sql.NullString
@@ -78,8 +74,10 @@ type FieldDB struct {
 
 	// Declation for basic field fieldDB.Fieldtypename
 	Fieldtypename_Data sql.NullString
+
 	// encoding of pointers
-	FieldPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	FieldPointersEncoding
 }
 
 // FieldDBs arrays fieldDBs
@@ -101,7 +99,7 @@ type FieldWOP struct {
 
 	Name string `xlsx:"1"`
 
-	Fieldname string `xlsx:"2"`
+	Identifier string `xlsx:"2"`
 
 	FieldTypeAsString string `xlsx:"3"`
 
@@ -115,7 +113,7 @@ var Field_Fields = []string{
 	// insertion for WOP basic fields
 	"ID",
 	"Name",
-	"Fieldname",
+	"Identifier",
 	"FieldTypeAsString",
 	"Structname",
 	"Fieldtypename",
@@ -123,56 +121,32 @@ var Field_Fields = []string{
 
 type BackRepoFieldStruct struct {
 	// stores FieldDB according to their gorm ID
-	Map_FieldDBID_FieldDB *map[uint]*FieldDB
+	Map_FieldDBID_FieldDB map[uint]*FieldDB
 
 	// stores FieldDB ID according to Field address
-	Map_FieldPtr_FieldDBID *map[*models.Field]uint
+	Map_FieldPtr_FieldDBID map[*models.Field]uint
 
 	// stores Field according to their gorm ID
-	Map_FieldDBID_FieldPtr *map[uint]*models.Field
+	Map_FieldDBID_FieldPtr map[uint]*models.Field
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoField *BackRepoFieldStruct) GetDB() *gorm.DB {
+func (backRepoField *BackRepoFieldStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoField.stage
+	return
+}
+
+func (backRepoField *BackRepoFieldStruct) GetDB() db.DBInterface {
 	return backRepoField.db
 }
 
 // GetFieldDBFromFieldPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoField *BackRepoFieldStruct) GetFieldDBFromFieldPtr(field *models.Field) (fieldDB *FieldDB) {
-	id := (*backRepoField.Map_FieldPtr_FieldDBID)[field]
-	fieldDB = (*backRepoField.Map_FieldDBID_FieldDB)[id]
-	return
-}
-
-// BackRepoField.Init set up the BackRepo of the Field
-func (backRepoField *BackRepoFieldStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoField.Map_FieldDBID_FieldPtr != nil {
-		err := errors.New("In Init, backRepoField.Map_FieldDBID_FieldPtr should be nil")
-		return err
-	}
-
-	if backRepoField.Map_FieldDBID_FieldDB != nil {
-		err := errors.New("In Init, backRepoField.Map_FieldDBID_FieldDB should be nil")
-		return err
-	}
-
-	if backRepoField.Map_FieldPtr_FieldDBID != nil {
-		err := errors.New("In Init, backRepoField.Map_FieldPtr_FieldDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.Field, 0)
-	backRepoField.Map_FieldDBID_FieldPtr = &tmp
-
-	tmpDB := make(map[uint]*FieldDB, 0)
-	backRepoField.Map_FieldDBID_FieldDB = &tmpDB
-
-	tmpID := make(map[*models.Field]uint, 0)
-	backRepoField.Map_FieldPtr_FieldDBID = &tmpID
-
-	backRepoField.db = db
+	id := backRepoField.Map_FieldPtr_FieldDBID[field]
+	fieldDB = backRepoField.Map_FieldDBID_FieldDB[id]
 	return
 }
 
@@ -186,7 +160,7 @@ func (backRepoField *BackRepoFieldStruct) CommitPhaseOne(stage *models.StageStru
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, field := range *backRepoField.Map_FieldDBID_FieldPtr {
+	for id, field := range backRepoField.Map_FieldDBID_FieldPtr {
 		if _, ok := stage.Fields[field]; !ok {
 			backRepoField.CommitDeleteInstance(id)
 		}
@@ -198,19 +172,20 @@ func (backRepoField *BackRepoFieldStruct) CommitPhaseOne(stage *models.StageStru
 // BackRepoField.CommitDeleteInstance commits deletion of Field to the BackRepo
 func (backRepoField *BackRepoFieldStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	field := (*backRepoField.Map_FieldDBID_FieldPtr)[id]
+	field := backRepoField.Map_FieldDBID_FieldPtr[id]
 
 	// field is not staged anymore, remove fieldDB
-	fieldDB := (*backRepoField.Map_FieldDBID_FieldDB)[id]
-	query := backRepoField.db.Unscoped().Delete(&fieldDB)
-	if query.Error != nil {
-		return query.Error
+	fieldDB := backRepoField.Map_FieldDBID_FieldDB[id]
+	db, _ := backRepoField.db.Unscoped()
+	_, err := db.Delete(fieldDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoField.Map_FieldPtr_FieldDBID), field)
-	delete((*backRepoField.Map_FieldDBID_FieldPtr), id)
-	delete((*backRepoField.Map_FieldDBID_FieldDB), id)
+	delete(backRepoField.Map_FieldPtr_FieldDBID, field)
+	delete(backRepoField.Map_FieldDBID_FieldPtr, id)
+	delete(backRepoField.Map_FieldDBID_FieldDB, id)
 
 	return
 }
@@ -220,7 +195,7 @@ func (backRepoField *BackRepoFieldStruct) CommitDeleteInstance(id uint) (Error e
 func (backRepoField *BackRepoFieldStruct) CommitPhaseOneInstance(field *models.Field) (Error error) {
 
 	// check if the field is not commited yet
-	if _, ok := (*backRepoField.Map_FieldPtr_FieldDBID)[field]; ok {
+	if _, ok := backRepoField.Map_FieldPtr_FieldDBID[field]; ok {
 		return
 	}
 
@@ -228,15 +203,15 @@ func (backRepoField *BackRepoFieldStruct) CommitPhaseOneInstance(field *models.F
 	var fieldDB FieldDB
 	fieldDB.CopyBasicFieldsFromField(field)
 
-	query := backRepoField.db.Create(&fieldDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoField.db.Create(&fieldDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoField.Map_FieldPtr_FieldDBID)[field] = fieldDB.ID
-	(*backRepoField.Map_FieldDBID_FieldPtr)[fieldDB.ID] = field
-	(*backRepoField.Map_FieldDBID_FieldDB)[fieldDB.ID] = &fieldDB
+	backRepoField.Map_FieldPtr_FieldDBID[field] = fieldDB.ID
+	backRepoField.Map_FieldDBID_FieldPtr[fieldDB.ID] = field
+	backRepoField.Map_FieldDBID_FieldDB[fieldDB.ID] = &fieldDB
 
 	return
 }
@@ -245,7 +220,7 @@ func (backRepoField *BackRepoFieldStruct) CommitPhaseOneInstance(field *models.F
 // Phase Two is the update of instance with the field in the database
 func (backRepoField *BackRepoFieldStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, field := range *backRepoField.Map_FieldDBID_FieldPtr {
+	for idx, field := range backRepoField.Map_FieldDBID_FieldPtr {
 		backRepoField.CommitPhaseTwoInstance(backRepo, idx, field)
 	}
 
@@ -257,14 +232,14 @@ func (backRepoField *BackRepoFieldStruct) CommitPhaseTwo(backRepo *BackRepoStruc
 func (backRepoField *BackRepoFieldStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, field *models.Field) (Error error) {
 
 	// fetch matching fieldDB
-	if fieldDB, ok := (*backRepoField.Map_FieldDBID_FieldDB)[idx]; ok {
+	if fieldDB, ok := backRepoField.Map_FieldDBID_FieldDB[idx]; ok {
 
 		fieldDB.CopyBasicFieldsFromField(field)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoField.db.Save(&fieldDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoField.db.Save(fieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -279,20 +254,19 @@ func (backRepoField *BackRepoFieldStruct) CommitPhaseTwoInstance(backRepo *BackR
 // BackRepoField.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoField *BackRepoFieldStruct) CheckoutPhaseOne() (Error error) {
 
 	fieldDBArray := make([]FieldDB, 0)
-	query := backRepoField.db.Find(&fieldDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoField.db.Find(&fieldDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	fieldInstancesToBeRemovedFromTheStage := make(map[*models.Field]any)
-	for key, value := range models.Stage.Fields {
+	for key, value := range backRepoField.stage.Fields {
 		fieldInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -302,7 +276,7 @@ func (backRepoField *BackRepoFieldStruct) CheckoutPhaseOne() (Error error) {
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		field, ok := (*backRepoField.Map_FieldDBID_FieldPtr)[fieldDB.ID]
+		field, ok := backRepoField.Map_FieldDBID_FieldPtr[fieldDB.ID]
 		if ok {
 			delete(fieldInstancesToBeRemovedFromTheStage, field)
 		}
@@ -310,13 +284,13 @@ func (backRepoField *BackRepoFieldStruct) CheckoutPhaseOne() (Error error) {
 
 	// remove from stage and back repo's 3 maps all fields that are not in the checkout
 	for field := range fieldInstancesToBeRemovedFromTheStage {
-		field.Unstage()
+		field.Unstage(backRepoField.GetStage())
 
 		// remove instance from the back repo 3 maps
-		fieldID := (*backRepoField.Map_FieldPtr_FieldDBID)[field]
-		delete((*backRepoField.Map_FieldPtr_FieldDBID), field)
-		delete((*backRepoField.Map_FieldDBID_FieldDB), fieldID)
-		delete((*backRepoField.Map_FieldDBID_FieldPtr), fieldID)
+		fieldID := backRepoField.Map_FieldPtr_FieldDBID[field]
+		delete(backRepoField.Map_FieldPtr_FieldDBID, field)
+		delete(backRepoField.Map_FieldDBID_FieldDB, fieldID)
+		delete(backRepoField.Map_FieldDBID_FieldPtr, fieldID)
 	}
 
 	return
@@ -326,24 +300,27 @@ func (backRepoField *BackRepoFieldStruct) CheckoutPhaseOne() (Error error) {
 // models version of the fieldDB
 func (backRepoField *BackRepoFieldStruct) CheckoutPhaseOneInstance(fieldDB *FieldDB) (Error error) {
 
-	field, ok := (*backRepoField.Map_FieldDBID_FieldPtr)[fieldDB.ID]
+	field, ok := backRepoField.Map_FieldDBID_FieldPtr[fieldDB.ID]
 	if !ok {
 		field = new(models.Field)
 
-		(*backRepoField.Map_FieldDBID_FieldPtr)[fieldDB.ID] = field
-		(*backRepoField.Map_FieldPtr_FieldDBID)[field] = fieldDB.ID
+		backRepoField.Map_FieldDBID_FieldPtr[fieldDB.ID] = field
+		backRepoField.Map_FieldPtr_FieldDBID[field] = fieldDB.ID
 
 		// append model store with the new element
 		field.Name = fieldDB.Name_Data.String
-		field.Stage()
+		field.Stage(backRepoField.GetStage())
 	}
 	fieldDB.CopyBasicFieldsToField(field)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	field.Stage(backRepoField.GetStage())
 
 	// preserve pointer to fieldDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_FieldDBID_FieldDB)[fieldDB hold variable pointers
 	fieldDB_Data := *fieldDB
 	preservedPtrToField := &fieldDB_Data
-	(*backRepoField.Map_FieldDBID_FieldDB)[fieldDB.ID] = preservedPtrToField
+	backRepoField.Map_FieldDBID_FieldDB[fieldDB.ID] = preservedPtrToField
 
 	return
 }
@@ -353,7 +330,7 @@ func (backRepoField *BackRepoFieldStruct) CheckoutPhaseOneInstance(fieldDB *Fiel
 func (backRepoField *BackRepoFieldStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, fieldDB := range *backRepoField.Map_FieldDBID_FieldDB {
+	for _, fieldDB := range backRepoField.Map_FieldDBID_FieldDB {
 		backRepoField.CheckoutPhaseTwoInstance(backRepo, fieldDB)
 	}
 	return
@@ -363,8 +340,14 @@ func (backRepoField *BackRepoFieldStruct) CheckoutPhaseTwo(backRepo *BackRepoStr
 // Phase Two is the update of instance with the field in the database
 func (backRepoField *BackRepoFieldStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, fieldDB *FieldDB) (Error error) {
 
-	field := (*backRepoField.Map_FieldDBID_FieldPtr)[fieldDB.ID]
-	_ = field // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	field := backRepoField.Map_FieldDBID_FieldPtr[fieldDB.ID]
+
+	fieldDB.DecodePointers(backRepo, field)
+
+	return
+}
+
+func (fieldDB *FieldDB) DecodePointers(backRepo *BackRepoStruct, field *models.Field) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -373,7 +356,7 @@ func (backRepoField *BackRepoFieldStruct) CheckoutPhaseTwoInstance(backRepo *Bac
 // CommitField allows commit of a single field (if already staged)
 func (backRepo *BackRepoStruct) CommitField(field *models.Field) {
 	backRepo.BackRepoField.CommitPhaseOneInstance(field)
-	if id, ok := (*backRepo.BackRepoField.Map_FieldPtr_FieldDBID)[field]; ok {
+	if id, ok := backRepo.BackRepoField.Map_FieldPtr_FieldDBID[field]; ok {
 		backRepo.BackRepoField.CommitPhaseTwoInstance(backRepo, id, field)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -382,14 +365,14 @@ func (backRepo *BackRepoStruct) CommitField(field *models.Field) {
 // CommitField allows checkout of a single field (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutField(field *models.Field) {
 	// check if the field is staged
-	if _, ok := (*backRepo.BackRepoField.Map_FieldPtr_FieldDBID)[field]; ok {
+	if _, ok := backRepo.BackRepoField.Map_FieldPtr_FieldDBID[field]; ok {
 
-		if id, ok := (*backRepo.BackRepoField.Map_FieldPtr_FieldDBID)[field]; ok {
+		if id, ok := backRepo.BackRepoField.Map_FieldPtr_FieldDBID[field]; ok {
 			var fieldDB FieldDB
 			fieldDB.ID = id
 
-			if err := backRepo.BackRepoField.db.First(&fieldDB, id).Error; err != nil {
-				log.Panicln("CheckoutField : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoField.db.First(&fieldDB, id); err != nil {
+				log.Fatalln("CheckoutField : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoField.CheckoutPhaseOneInstance(&fieldDB)
 			backRepo.BackRepoField.CheckoutPhaseTwoInstance(backRepo, &fieldDB)
@@ -404,8 +387,28 @@ func (fieldDB *FieldDB) CopyBasicFieldsFromField(field *models.Field) {
 	fieldDB.Name_Data.String = field.Name
 	fieldDB.Name_Data.Valid = true
 
-	fieldDB.Fieldname_Data.String = field.Fieldname
-	fieldDB.Fieldname_Data.Valid = true
+	fieldDB.Identifier_Data.String = field.Identifier
+	fieldDB.Identifier_Data.Valid = true
+
+	fieldDB.FieldTypeAsString_Data.String = field.FieldTypeAsString
+	fieldDB.FieldTypeAsString_Data.Valid = true
+
+	fieldDB.Structname_Data.String = field.Structname
+	fieldDB.Structname_Data.Valid = true
+
+	fieldDB.Fieldtypename_Data.String = field.Fieldtypename
+	fieldDB.Fieldtypename_Data.Valid = true
+}
+
+// CopyBasicFieldsFromField_WOP
+func (fieldDB *FieldDB) CopyBasicFieldsFromField_WOP(field *models.Field_WOP) {
+	// insertion point for fields commit
+
+	fieldDB.Name_Data.String = field.Name
+	fieldDB.Name_Data.Valid = true
+
+	fieldDB.Identifier_Data.String = field.Identifier
+	fieldDB.Identifier_Data.Valid = true
 
 	fieldDB.FieldTypeAsString_Data.String = field.FieldTypeAsString
 	fieldDB.FieldTypeAsString_Data.Valid = true
@@ -424,8 +427,8 @@ func (fieldDB *FieldDB) CopyBasicFieldsFromFieldWOP(field *FieldWOP) {
 	fieldDB.Name_Data.String = field.Name
 	fieldDB.Name_Data.Valid = true
 
-	fieldDB.Fieldname_Data.String = field.Fieldname
-	fieldDB.Fieldname_Data.Valid = true
+	fieldDB.Identifier_Data.String = field.Identifier
+	fieldDB.Identifier_Data.Valid = true
 
 	fieldDB.FieldTypeAsString_Data.String = field.FieldTypeAsString
 	fieldDB.FieldTypeAsString_Data.Valid = true
@@ -441,7 +444,17 @@ func (fieldDB *FieldDB) CopyBasicFieldsFromFieldWOP(field *FieldWOP) {
 func (fieldDB *FieldDB) CopyBasicFieldsToField(field *models.Field) {
 	// insertion point for checkout of basic fields (back repo to stage)
 	field.Name = fieldDB.Name_Data.String
-	field.Fieldname = fieldDB.Fieldname_Data.String
+	field.Identifier = fieldDB.Identifier_Data.String
+	field.FieldTypeAsString = fieldDB.FieldTypeAsString_Data.String
+	field.Structname = fieldDB.Structname_Data.String
+	field.Fieldtypename = fieldDB.Fieldtypename_Data.String
+}
+
+// CopyBasicFieldsToField_WOP
+func (fieldDB *FieldDB) CopyBasicFieldsToField_WOP(field *models.Field_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	field.Name = fieldDB.Name_Data.String
+	field.Identifier = fieldDB.Identifier_Data.String
 	field.FieldTypeAsString = fieldDB.FieldTypeAsString_Data.String
 	field.Structname = fieldDB.Structname_Data.String
 	field.Fieldtypename = fieldDB.Fieldtypename_Data.String
@@ -452,7 +465,7 @@ func (fieldDB *FieldDB) CopyBasicFieldsToFieldWOP(field *FieldWOP) {
 	field.ID = int(fieldDB.ID)
 	// insertion point for checkout of basic fields (back repo to stage)
 	field.Name = fieldDB.Name_Data.String
-	field.Fieldname = fieldDB.Fieldname_Data.String
+	field.Identifier = fieldDB.Identifier_Data.String
 	field.FieldTypeAsString = fieldDB.FieldTypeAsString_Data.String
 	field.Structname = fieldDB.Structname_Data.String
 	field.Fieldtypename = fieldDB.Fieldtypename_Data.String
@@ -466,7 +479,7 @@ func (backRepoField *BackRepoFieldStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*FieldDB, 0)
-	for _, fieldDB := range *backRepoField.Map_FieldDBID_FieldDB {
+	for _, fieldDB := range backRepoField.Map_FieldDBID_FieldDB {
 		forBackup = append(forBackup, fieldDB)
 	}
 
@@ -477,12 +490,12 @@ func (backRepoField *BackRepoFieldStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json Field ", filename, " ", err.Error())
+		log.Fatal("Cannot json Field ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json Field file", err.Error())
+		log.Fatal("Cannot write the json Field file", err.Error())
 	}
 }
 
@@ -492,7 +505,7 @@ func (backRepoField *BackRepoFieldStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*FieldDB, 0)
-	for _, fieldDB := range *backRepoField.Map_FieldDBID_FieldDB {
+	for _, fieldDB := range backRepoField.Map_FieldDBID_FieldDB {
 		forBackup = append(forBackup, fieldDB)
 	}
 
@@ -502,7 +515,7 @@ func (backRepoField *BackRepoFieldStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("Field")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -527,13 +540,13 @@ func (backRepoField *BackRepoFieldStruct) RestoreXLPhaseOne(file *xlsx.File) {
 	sh, ok := file.Sheet["Field"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoField.rowVisitorField)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -553,11 +566,11 @@ func (backRepoField *BackRepoFieldStruct) rowVisitorField(row *xlsx.Row) error {
 
 		fieldDB_ID_atBackupTime := fieldDB.ID
 		fieldDB.ID = 0
-		query := backRepoField.db.Create(fieldDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoField.db.Create(fieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoField.Map_FieldDBID_FieldDB)[fieldDB.ID] = fieldDB
+		backRepoField.Map_FieldDBID_FieldDB[fieldDB.ID] = fieldDB
 		BackRepoFieldid_atBckpTime_newID[fieldDB_ID_atBackupTime] = fieldDB.ID
 	}
 	return nil
@@ -575,7 +588,7 @@ func (backRepoField *BackRepoFieldStruct) RestorePhaseOne(dirPath string) {
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json Field file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json Field file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -590,16 +603,16 @@ func (backRepoField *BackRepoFieldStruct) RestorePhaseOne(dirPath string) {
 
 		fieldDB_ID_atBackupTime := fieldDB.ID
 		fieldDB.ID = 0
-		query := backRepoField.db.Create(fieldDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoField.db.Create(fieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoField.Map_FieldDBID_FieldDB)[fieldDB.ID] = fieldDB
+		backRepoField.Map_FieldDBID_FieldDB[fieldDB.ID] = fieldDB
 		BackRepoFieldid_atBckpTime_newID[fieldDB_ID_atBackupTime] = fieldDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json Field file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json Field file", err.Error())
 	}
 }
 
@@ -607,25 +620,44 @@ func (backRepoField *BackRepoFieldStruct) RestorePhaseOne(dirPath string) {
 // to compute new index
 func (backRepoField *BackRepoFieldStruct) RestorePhaseTwo() {
 
-	for _, fieldDB := range *backRepoField.Map_FieldDBID_FieldDB {
+	for _, fieldDB := range backRepoField.Map_FieldDBID_FieldDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = fieldDB
 
 		// insertion point for reindexing pointers encoding
-		// This reindex field.Fields
-		if fieldDB.Classshape_FieldsDBID.Int64 != 0 {
-			fieldDB.Classshape_FieldsDBID.Int64 =
-				int64(BackRepoClassshapeid_atBckpTime_newID[uint(fieldDB.Classshape_FieldsDBID.Int64)])
-		}
-
 		// update databse with new index encoding
-		query := backRepoField.db.Model(fieldDB).Updates(*fieldDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoField.db.Model(fieldDB)
+		_, err := db.Updates(*fieldDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoField.ResetReversePointers commits all staged instances of Field to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoField *BackRepoFieldStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, field := range backRepoField.Map_FieldDBID_FieldPtr {
+		backRepoField.ResetReversePointersInstance(backRepo, idx, field)
+	}
+
+	return
+}
+
+func (backRepoField *BackRepoFieldStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, field *models.Field) (Error error) {
+
+	// fetch matching fieldDB
+	if fieldDB, ok := backRepoField.Map_FieldDBID_FieldDB[idx]; ok {
+		_ = fieldDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/shabbyrobe/xmlwriter"
 )
@@ -28,6 +29,9 @@ type Sheet struct {
 	DataValidations []*xlsxDataValidation
 	cellStore       CellStore
 	currentRow      *Row
+	cellStoreName   string // The first part of the key used in
+	// the cellStore.  This name is stable,
+	// unlike the Name, which can change
 }
 
 // NewSheet constructs a Sheet with the default CellStore and returns
@@ -39,9 +43,13 @@ func NewSheet(name string) (*Sheet, error) {
 // NewSheetWithCellStore constructs a Sheet, backed by a CellStore,
 // for which you must provide the constructor function.
 func NewSheetWithCellStore(name string, constructor CellStoreConstructor) (*Sheet, error) {
+	if err := IsSaneSheetName(name); err != nil {
+		return nil, fmt.Errorf("sheet name is invalid: %w", err)
+	}
 	sheet := &Sheet{
-		Name: name,
-		Cols: &ColStore{},
+		Name:          name,
+		Cols:          &ColStore{},
+		cellStoreName: name,
 	}
 	var err error
 	sheet.cellStore, err = constructor()
@@ -207,7 +215,7 @@ func (s *Sheet) AddRow() *Row {
 }
 
 func makeRowKey(s *Sheet, i int) string {
-	return fmt.Sprintf("%s:%06d", s.Name, i)
+	return fmt.Sprintf("%s:%06d", s.cellStoreName, i)
 }
 
 // Add a new Row to a Sheet at a specific index
@@ -280,7 +288,7 @@ func (s *Sheet) maybeAddRow(rowCount int) {
 		loopCnt := rowCount - s.MaxRow
 		for i := 0; i < loopCnt; i++ {
 			row := s.cellStore.MakeRow(s)
-			row.num = i
+			row.num = s.MaxRow + i
 			s.setCurrentRow(row)
 		}
 		s.MaxRow = rowCount
@@ -290,10 +298,15 @@ func (s *Sheet) maybeAddRow(rowCount int) {
 // Make sure we always have as many Rows as we do cells.
 func (s *Sheet) Row(idx int) (*Row, error) {
 	s.mustBeOpen()
+
 	s.maybeAddRow(idx + 1)
-	if s.currentRow != nil && idx == s.currentRow.num {
-		return s.currentRow, nil
+	if s.currentRow != nil {
+		if idx == s.currentRow.num {
+			return s.currentRow, nil
+		}
+		s.cellStore.WriteRow(s.currentRow)
 	}
+
 	r, err := s.cellStore.ReadRow(makeRowKey(s, idx), s)
 	if err != nil {
 		if _, ok := err.(*RowNotFoundError); !ok {
@@ -311,6 +324,7 @@ func (s *Sheet) Row(idx int) (*Row, error) {
 }
 
 // Return the Col that applies to this Column index, or return nil if no such Col exists
+// Column numbers start from 1.
 func (s *Sheet) Col(idx int) *Col {
 	s.mustBeOpen()
 	if s.Cols == nil {
@@ -324,7 +338,7 @@ func (s *Sheet) Col(idx int) *Col {
 //
 // For example:
 //
-//    cell := sheet.Cell(0,0)
+//	cell := sheet.Cell(0,0)
 //
 // ... would set the variable "cell" to contain a Cell struct
 // containing the data from the field "A1" on the spreadsheet.
@@ -344,8 +358,9 @@ func (s *Sheet) Cell(row, col int) (*Cell, error) {
 	return cell, err
 }
 
-//Set the parameters of a column.  Parameters are passed as a pointer
-//to a Col structure which you much construct yourself.
+// Set the parameters of a column.  Parameters are passed as a pointer
+// to a Col structure which you much construct yourself.
+// Column numbers start from 1.
 func (s *Sheet) SetColParameters(col *Col) {
 	s.mustBeOpen()
 	if s.Cols == nil {
@@ -402,6 +417,7 @@ func (s *Sheet) setCol(min, max int, setter func(col *Col)) {
 }
 
 // Set the width of a range of columns.
+// Column numbers start from 1.
 func (s *Sheet) SetColWidth(min, max int, width float64) {
 	s.mustBeOpen()
 	s.setCol(min, max, func(col *Col) {
@@ -417,6 +433,7 @@ func DefaultAutoWidth(s string) float64 {
 
 // Tries to guess the best width for a column, based on the largest
 // cell content. A scale function needs to be provided.
+// Column numbers start from 1.
 func (s *Sheet) SetColAutoWidth(colIndex int, width func(string) float64) error {
 	s.mustBeOpen()
 	largestWidth := 0.0
@@ -521,7 +538,6 @@ func (s *Sheet) makeSheetFormatPr(worksheet *xlsxWorksheet) {
 	worksheet.SheetFormatPr.DefaultColWidth = s.SheetFormat.DefaultColWidth
 }
 
-//
 func (s *Sheet) makeCols(worksheet *xlsxWorksheet, styles *xlsxStyleSheet) (maxLevelCol uint8) {
 	s.mustBeOpen()
 	maxLevelCol = 0
@@ -936,4 +952,19 @@ func handleNumFmtIdForXLSX(NumFmtId int, styles *xlsxStyleSheet) (XfId int) {
 	}
 	XfId = styles.addCellXf(xCellXf)
 	return
+}
+
+func IsSaneSheetName(sheetName string) error {
+	runeLength := utf8.RuneCountInString(sheetName)
+	if runeLength > 31 || runeLength == 0 {
+		return fmt.Errorf("sheet name must be 31 or fewer characters long.  It is currently '%d' characters long", runeLength)
+	}
+	// Iterate over the runes
+	for _, r := range sheetName {
+		// Excel forbids : \ / ? * [ ]
+		if r == ':' || r == '\\' || r == '/' || r == '?' || r == '*' || r == '[' || r == ']' {
+			return fmt.Errorf("sheet name must not contain any restricted characters : \\ / ? * [ ] but contains '%s'", string(r))
+		}
+	}
+	return nil
 }

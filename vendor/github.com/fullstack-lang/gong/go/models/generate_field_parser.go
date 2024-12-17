@@ -11,26 +11,76 @@ import (
 //
 // by using the map_Structname_fieldList for embedded struct fields
 // and modelPkg for access existing gongstructs and gongenums
-func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
+func GenerateFieldParser(
+	fieldList *[]*ast.Field,
+	owningGongstruct *GongStruct,
 	map_Structname_fieldList *map[string]*[]*ast.Field,
 	modelPkg *ModelPkg,
-	compositeTypeStructName string) {
+	compositeTypeStructName string, // when it is composed
+	prefix string, // used in anonymous struct
+) {
 
 	for _, field := range *fieldList {
 
-		// get the comment group and check wether it is "swagger:ignore"
+		// get the comment group and check wether it is "swagger:ignore" or "gong:ignore"
 		var isIgnoredField bool
+		var isTextArea bool
+		var isBespokeWidth bool
+		var bespokeWidth int
+		var isBespokeHeight bool
+		var bespokeHeight int
+		var bespokeTimeFormat string
 		if field.Comment != nil {
 			for _, comment := range field.Comment.List {
-				if strings.Contains(comment.Text, "swagger:ignore") {
+				if strings.Contains(comment.Text, "swagger:ignore") || strings.Contains(comment.Text, "gong:ignore") {
 					isIgnoredField = true
+				}
+				if strings.Contains(comment.Text, "gong:text") {
+					isTextArea = true
+				}
+				if strings.Contains(comment.Text, "gong:width") {
+					width, err := extractWidthNumber(comment.Text)
+					if err == nil {
+						isBespokeWidth = true
+						bespokeWidth = width
+					}
+				}
+				if strings.Contains(comment.Text, "gong:height") {
+					height, err := extractHeightNumber(comment.Text)
+					if err == nil {
+						isBespokeHeight = true
+						bespokeHeight = height
+					}
+				}
+				if strings.Contains(comment.Text, "gong:bespoketimeserializeformat") {
+					bespokeTimeFormat, _ = extractTimeFormat(comment.Text)
 				}
 			}
 		}
 		if field.Doc != nil {
 			for _, comment := range field.Doc.List {
-				if strings.Contains(comment.Text, "swagger:ignore") {
+				if strings.Contains(comment.Text, "swagger:ignore") || strings.Contains(comment.Text, "gong:ignore") {
 					isIgnoredField = true
+				}
+				if strings.Contains(comment.Text, "gong:text") {
+					isTextArea = true
+				}
+				if strings.Contains(comment.Text, "gong:width") {
+					width, err := extractWidthNumber(comment.Text)
+					if err == nil {
+						isBespokeWidth = true
+						bespokeWidth = width
+					}
+				}
+				if strings.Contains(comment.Text, "gong:height") {
+					height, err := extractHeightNumber(comment.Text)
+					if err == nil {
+						isBespokeHeight = true
+						bespokeHeight = height
+					}
+				}
+				if strings.Contains(comment.Text, "gong:bespoketimeserializeformat") {
+					bespokeTimeFormat, _ = extractTimeFormat(comment.Text)
 				}
 			}
 		}
@@ -43,11 +93,17 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 			switch embedType := field.Type.(type) {
 			case *ast.Ident:
 				// log.Println("processing embedded struct ", embedType.Name)
-				GenerateFieldParser((*map_Structname_fieldList)[embedType.Name],
-					owningGongstruct,
-					map_Structname_fieldList,
-					modelPkg,
-					embedType.Name)
+				if _fieldList, ok := (*map_Structname_fieldList)[embedType.Name]; ok {
+					GenerateFieldParser(_fieldList,
+						owningGongstruct,
+						map_Structname_fieldList,
+						modelPkg,
+						embedType.Name,
+						"")
+				} else {
+					log.Fatalln("Unknown embedded type", embedType.Name)
+				}
+
 			default:
 			}
 			continue
@@ -60,6 +116,9 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 		// }
 		for _, fieldNameIdent := range field.Names {
 			fieldName := fieldNameIdent.Name
+			if prefix != "" {
+				fieldName = prefix + "." + fieldName
+			}
 			switch __fieldType := field.Type.(type) {
 			case *ast.Ident:
 				switch __fieldType.Name {
@@ -72,7 +131,22 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 							DeclaredType:        "string",
 							Index:               len(owningGongstruct.Fields),
 							CompositeStructName: compositeTypeStructName,
+							IsTextArea:          isTextArea,
+							IsBespokeWidth:      isBespokeWidth,
+							BespokeWidth:        bespokeWidth,
+							IsBespokeHeight:     isBespokeHeight,
+							BespokeHeight:       bespokeHeight,
 						}
+
+					if field.Doc != nil {
+						for _, comment := range field.Doc.List {
+							text := comment.Text
+							if strings.HasPrefix(text, "//gong:ident") {
+								gongField.IsDocLink = true
+							}
+						}
+					}
+
 					owningGongstruct.Fields = append(owningGongstruct.Fields, gongField)
 
 				case "int":
@@ -139,7 +213,7 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 						}
 
 					} else {
-						log.Println("Cannot parse field of type ", __fieldType.Name)
+						// log.Println("Cannot parse field of type ", __fieldType.Name)
 					}
 
 				}
@@ -155,6 +229,7 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 									Name:                fieldName,
 									Index:               len(owningGongstruct.Fields),
 									CompositeStructName: compositeTypeStructName,
+									BespokeTimeFormat:   bespokeTimeFormat,
 								}
 							owningGongstruct.Fields = append(owningGongstruct.Fields, gongField)
 						case "Duration":
@@ -185,6 +260,16 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 								Index:               len(owningGongstruct.Fields),
 								CompositeStructName: compositeTypeStructName,
 							}
+
+						if field.Doc != nil {
+							for _, comment := range field.Doc.List {
+								text := comment.Text
+								if strings.HasPrefix(text, "//gong:type") {
+									gongField.IsType = true
+								}
+							}
+						}
+
 						owningGongstruct.Fields = append(owningGongstruct.Fields, gongField)
 					}
 				}
@@ -206,8 +291,19 @@ func GenerateFieldParser(fieldList *[]*ast.Field, owningGongstruct *GongStruct,
 						}
 					}
 				}
+			case *ast.StructType:
+				// we are in an anonymous struct
+				// log.Println("Anonymous struct", fieldName)
+				list := __fieldType.Fields.List
+				GenerateFieldParser(&list,
+					owningGongstruct,
+					map_Structname_fieldList,
+					modelPkg,
+					"",
+					fieldName)
+
 			default:
-				log.Println("Field ", fieldName, " of struct ", owningGongstruct.Name, " is not a gong type")
+				// log.Println("Field ", fieldName, " of struct ", owningGongstruct.Name, " is not a gong type")
 			}
 		}
 	}

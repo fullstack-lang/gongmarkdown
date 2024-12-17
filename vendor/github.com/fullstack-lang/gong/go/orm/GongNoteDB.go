@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gong/go/db"
 	"github.com/fullstack-lang/gong/go/models"
 )
 
@@ -35,16 +36,20 @@ var dummy_GongNote_sort sort.Float64Slice
 type GongNoteAPI struct {
 	gorm.Model
 
-	models.GongNote
+	models.GongNote_WOP
 
 	// encoding of pointers
-	GongNotePointersEnconding
+	// for API, it cannot be embedded
+	GongNotePointersEncoding GongNotePointersEncoding
 }
 
-// GongNotePointersEnconding encodes pointers to Struct and
+// GongNotePointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type GongNotePointersEnconding struct {
+type GongNotePointersEncoding struct {
 	// insertion for pointer fields encoding declaration
+
+	// field Links is a slice of pointers to another Struct (optional or 0..1)
+	Links IntSlice `gorm:"type:TEXT"`
 }
 
 // GongNoteDB describes a gongnote in the database
@@ -63,8 +68,13 @@ type GongNoteDB struct {
 
 	// Declation for basic field gongnoteDB.Body
 	Body_Data sql.NullString
+
+	// Declation for basic field gongnoteDB.BodyHTML
+	BodyHTML_Data sql.NullString
+
 	// encoding of pointers
-	GongNotePointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	GongNotePointersEncoding
 }
 
 // GongNoteDBs arrays gongnoteDBs
@@ -87,6 +97,8 @@ type GongNoteWOP struct {
 	Name string `xlsx:"1"`
 
 	Body string `xlsx:"2"`
+
+	BodyHTML string `xlsx:"3"`
 	// insertion for WOP pointer fields
 }
 
@@ -95,60 +107,37 @@ var GongNote_Fields = []string{
 	"ID",
 	"Name",
 	"Body",
+	"BodyHTML",
 }
 
 type BackRepoGongNoteStruct struct {
 	// stores GongNoteDB according to their gorm ID
-	Map_GongNoteDBID_GongNoteDB *map[uint]*GongNoteDB
+	Map_GongNoteDBID_GongNoteDB map[uint]*GongNoteDB
 
 	// stores GongNoteDB ID according to GongNote address
-	Map_GongNotePtr_GongNoteDBID *map[*models.GongNote]uint
+	Map_GongNotePtr_GongNoteDBID map[*models.GongNote]uint
 
 	// stores GongNote according to their gorm ID
-	Map_GongNoteDBID_GongNotePtr *map[uint]*models.GongNote
+	Map_GongNoteDBID_GongNotePtr map[uint]*models.GongNote
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoGongNote *BackRepoGongNoteStruct) GetDB() *gorm.DB {
+func (backRepoGongNote *BackRepoGongNoteStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoGongNote.stage
+	return
+}
+
+func (backRepoGongNote *BackRepoGongNoteStruct) GetDB() db.DBInterface {
 	return backRepoGongNote.db
 }
 
 // GetGongNoteDBFromGongNotePtr is a handy function to access the back repo instance from the stage instance
 func (backRepoGongNote *BackRepoGongNoteStruct) GetGongNoteDBFromGongNotePtr(gongnote *models.GongNote) (gongnoteDB *GongNoteDB) {
-	id := (*backRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote]
-	gongnoteDB = (*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[id]
-	return
-}
-
-// BackRepoGongNote.Init set up the BackRepo of the GongNote
-func (backRepoGongNote *BackRepoGongNoteStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoGongNote.Map_GongNoteDBID_GongNotePtr != nil {
-		err := errors.New("In Init, backRepoGongNote.Map_GongNoteDBID_GongNotePtr should be nil")
-		return err
-	}
-
-	if backRepoGongNote.Map_GongNoteDBID_GongNoteDB != nil {
-		err := errors.New("In Init, backRepoGongNote.Map_GongNoteDBID_GongNoteDB should be nil")
-		return err
-	}
-
-	if backRepoGongNote.Map_GongNotePtr_GongNoteDBID != nil {
-		err := errors.New("In Init, backRepoGongNote.Map_GongNotePtr_GongNoteDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.GongNote, 0)
-	backRepoGongNote.Map_GongNoteDBID_GongNotePtr = &tmp
-
-	tmpDB := make(map[uint]*GongNoteDB, 0)
-	backRepoGongNote.Map_GongNoteDBID_GongNoteDB = &tmpDB
-
-	tmpID := make(map[*models.GongNote]uint, 0)
-	backRepoGongNote.Map_GongNotePtr_GongNoteDBID = &tmpID
-
-	backRepoGongNote.db = db
+	id := backRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote]
+	gongnoteDB = backRepoGongNote.Map_GongNoteDBID_GongNoteDB[id]
 	return
 }
 
@@ -162,7 +151,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseOne(stage *models.Sta
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, gongnote := range *backRepoGongNote.Map_GongNoteDBID_GongNotePtr {
+	for id, gongnote := range backRepoGongNote.Map_GongNoteDBID_GongNotePtr {
 		if _, ok := stage.GongNotes[gongnote]; !ok {
 			backRepoGongNote.CommitDeleteInstance(id)
 		}
@@ -174,19 +163,20 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseOne(stage *models.Sta
 // BackRepoGongNote.CommitDeleteInstance commits deletion of GongNote to the BackRepo
 func (backRepoGongNote *BackRepoGongNoteStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	gongnote := (*backRepoGongNote.Map_GongNoteDBID_GongNotePtr)[id]
+	gongnote := backRepoGongNote.Map_GongNoteDBID_GongNotePtr[id]
 
 	// gongnote is not staged anymore, remove gongnoteDB
-	gongnoteDB := (*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[id]
-	query := backRepoGongNote.db.Unscoped().Delete(&gongnoteDB)
-	if query.Error != nil {
-		return query.Error
+	gongnoteDB := backRepoGongNote.Map_GongNoteDBID_GongNoteDB[id]
+	db, _ := backRepoGongNote.db.Unscoped()
+	_, err := db.Delete(gongnoteDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoGongNote.Map_GongNotePtr_GongNoteDBID), gongnote)
-	delete((*backRepoGongNote.Map_GongNoteDBID_GongNotePtr), id)
-	delete((*backRepoGongNote.Map_GongNoteDBID_GongNoteDB), id)
+	delete(backRepoGongNote.Map_GongNotePtr_GongNoteDBID, gongnote)
+	delete(backRepoGongNote.Map_GongNoteDBID_GongNotePtr, id)
+	delete(backRepoGongNote.Map_GongNoteDBID_GongNoteDB, id)
 
 	return
 }
@@ -196,7 +186,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitDeleteInstance(id uint) (E
 func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseOneInstance(gongnote *models.GongNote) (Error error) {
 
 	// check if the gongnote is not commited yet
-	if _, ok := (*backRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote]; ok {
+	if _, ok := backRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote]; ok {
 		return
 	}
 
@@ -204,15 +194,15 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseOneInstance(gongnote 
 	var gongnoteDB GongNoteDB
 	gongnoteDB.CopyBasicFieldsFromGongNote(gongnote)
 
-	query := backRepoGongNote.db.Create(&gongnoteDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoGongNote.db.Create(&gongnoteDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote] = gongnoteDB.ID
-	(*backRepoGongNote.Map_GongNoteDBID_GongNotePtr)[gongnoteDB.ID] = gongnote
-	(*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[gongnoteDB.ID] = &gongnoteDB
+	backRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote] = gongnoteDB.ID
+	backRepoGongNote.Map_GongNoteDBID_GongNotePtr[gongnoteDB.ID] = gongnote
+	backRepoGongNote.Map_GongNoteDBID_GongNoteDB[gongnoteDB.ID] = &gongnoteDB
 
 	return
 }
@@ -221,7 +211,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseOneInstance(gongnote 
 // Phase Two is the update of instance with the field in the database
 func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, gongnote := range *backRepoGongNote.Map_GongNoteDBID_GongNotePtr {
+	for idx, gongnote := range backRepoGongNote.Map_GongNoteDBID_GongNotePtr {
 		backRepoGongNote.CommitPhaseTwoInstance(backRepo, idx, gongnote)
 	}
 
@@ -233,14 +223,32 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseTwo(backRepo *BackRep
 func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, gongnote *models.GongNote) (Error error) {
 
 	// fetch matching gongnoteDB
-	if gongnoteDB, ok := (*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[idx]; ok {
+	if gongnoteDB, ok := backRepoGongNote.Map_GongNoteDBID_GongNoteDB[idx]; ok {
 
 		gongnoteDB.CopyBasicFieldsFromGongNote(gongnote)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoGongNote.db.Save(&gongnoteDB)
-		if query.Error != nil {
-			return query.Error
+		// 1. reset
+		gongnoteDB.GongNotePointersEncoding.Links = make([]int, 0)
+		// 2. encode
+		for _, gonglinkAssocEnd := range gongnote.Links {
+			gonglinkAssocEnd_DB :=
+				backRepo.BackRepoGongLink.GetGongLinkDBFromGongLinkPtr(gonglinkAssocEnd)
+			
+			// the stage might be inconsistant, meaning that the gonglinkAssocEnd_DB might
+			// be missing from the stage. In this case, the commit operation is robust
+			// An alternative would be to crash here to reveal the missing element.
+			if gonglinkAssocEnd_DB == nil {
+				continue
+			}
+			
+			gongnoteDB.GongNotePointersEncoding.Links =
+				append(gongnoteDB.GongNotePointersEncoding.Links, int(gonglinkAssocEnd_DB.ID))
+		}
+
+		_, err := backRepoGongNote.db.Save(gongnoteDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -255,20 +263,19 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CommitPhaseTwoInstance(backRepo 
 // BackRepoGongNote.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseOne() (Error error) {
 
 	gongnoteDBArray := make([]GongNoteDB, 0)
-	query := backRepoGongNote.db.Find(&gongnoteDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoGongNote.db.Find(&gongnoteDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	gongnoteInstancesToBeRemovedFromTheStage := make(map[*models.GongNote]any)
-	for key, value := range models.Stage.GongNotes {
+	for key, value := range backRepoGongNote.stage.GongNotes {
 		gongnoteInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -278,7 +285,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseOne() (Error error)
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		gongnote, ok := (*backRepoGongNote.Map_GongNoteDBID_GongNotePtr)[gongnoteDB.ID]
+		gongnote, ok := backRepoGongNote.Map_GongNoteDBID_GongNotePtr[gongnoteDB.ID]
 		if ok {
 			delete(gongnoteInstancesToBeRemovedFromTheStage, gongnote)
 		}
@@ -286,13 +293,13 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseOne() (Error error)
 
 	// remove from stage and back repo's 3 maps all gongnotes that are not in the checkout
 	for gongnote := range gongnoteInstancesToBeRemovedFromTheStage {
-		gongnote.Unstage()
+		gongnote.Unstage(backRepoGongNote.GetStage())
 
 		// remove instance from the back repo 3 maps
-		gongnoteID := (*backRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote]
-		delete((*backRepoGongNote.Map_GongNotePtr_GongNoteDBID), gongnote)
-		delete((*backRepoGongNote.Map_GongNoteDBID_GongNoteDB), gongnoteID)
-		delete((*backRepoGongNote.Map_GongNoteDBID_GongNotePtr), gongnoteID)
+		gongnoteID := backRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote]
+		delete(backRepoGongNote.Map_GongNotePtr_GongNoteDBID, gongnote)
+		delete(backRepoGongNote.Map_GongNoteDBID_GongNoteDB, gongnoteID)
+		delete(backRepoGongNote.Map_GongNoteDBID_GongNotePtr, gongnoteID)
 	}
 
 	return
@@ -302,24 +309,27 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseOne() (Error error)
 // models version of the gongnoteDB
 func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseOneInstance(gongnoteDB *GongNoteDB) (Error error) {
 
-	gongnote, ok := (*backRepoGongNote.Map_GongNoteDBID_GongNotePtr)[gongnoteDB.ID]
+	gongnote, ok := backRepoGongNote.Map_GongNoteDBID_GongNotePtr[gongnoteDB.ID]
 	if !ok {
 		gongnote = new(models.GongNote)
 
-		(*backRepoGongNote.Map_GongNoteDBID_GongNotePtr)[gongnoteDB.ID] = gongnote
-		(*backRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote] = gongnoteDB.ID
+		backRepoGongNote.Map_GongNoteDBID_GongNotePtr[gongnoteDB.ID] = gongnote
+		backRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote] = gongnoteDB.ID
 
 		// append model store with the new element
 		gongnote.Name = gongnoteDB.Name_Data.String
-		gongnote.Stage()
+		gongnote.Stage(backRepoGongNote.GetStage())
 	}
 	gongnoteDB.CopyBasicFieldsToGongNote(gongnote)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	gongnote.Stage(backRepoGongNote.GetStage())
 
 	// preserve pointer to gongnoteDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_GongNoteDBID_GongNoteDB)[gongnoteDB hold variable pointers
 	gongnoteDB_Data := *gongnoteDB
 	preservedPtrToGongNote := &gongnoteDB_Data
-	(*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[gongnoteDB.ID] = preservedPtrToGongNote
+	backRepoGongNote.Map_GongNoteDBID_GongNoteDB[gongnoteDB.ID] = preservedPtrToGongNote
 
 	return
 }
@@ -329,7 +339,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseOneInstance(gongnot
 func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, gongnoteDB := range *backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
+	for _, gongnoteDB := range backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
 		backRepoGongNote.CheckoutPhaseTwoInstance(backRepo, gongnoteDB)
 	}
 	return
@@ -339,17 +349,32 @@ func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseTwo(backRepo *BackR
 // Phase Two is the update of instance with the field in the database
 func (backRepoGongNote *BackRepoGongNoteStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, gongnoteDB *GongNoteDB) (Error error) {
 
-	gongnote := (*backRepoGongNote.Map_GongNoteDBID_GongNotePtr)[gongnoteDB.ID]
-	_ = gongnote // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	gongnote := backRepoGongNote.Map_GongNoteDBID_GongNotePtr[gongnoteDB.ID]
+
+	gongnoteDB.DecodePointers(backRepo, gongnote)
+
+	return
+}
+
+func (gongnoteDB *GongNoteDB) DecodePointers(backRepo *BackRepoStruct, gongnote *models.GongNote) {
 
 	// insertion point for checkout of pointer encoding
+	// This loop redeem gongnote.Links in the stage from the encode in the back repo
+	// It parses all GongLinkDB in the back repo and if the reverse pointer encoding matches the back repo ID
+	// it appends the stage instance
+	// 1. reset the slice
+	gongnote.Links = gongnote.Links[:0]
+	for _, _GongLinkid := range gongnoteDB.GongNotePointersEncoding.Links {
+		gongnote.Links = append(gongnote.Links, backRepo.BackRepoGongLink.Map_GongLinkDBID_GongLinkPtr[uint(_GongLinkid)])
+	}
+
 	return
 }
 
 // CommitGongNote allows commit of a single gongnote (if already staged)
 func (backRepo *BackRepoStruct) CommitGongNote(gongnote *models.GongNote) {
 	backRepo.BackRepoGongNote.CommitPhaseOneInstance(gongnote)
-	if id, ok := (*backRepo.BackRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote]; ok {
+	if id, ok := backRepo.BackRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote]; ok {
 		backRepo.BackRepoGongNote.CommitPhaseTwoInstance(backRepo, id, gongnote)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -358,14 +383,14 @@ func (backRepo *BackRepoStruct) CommitGongNote(gongnote *models.GongNote) {
 // CommitGongNote allows checkout of a single gongnote (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutGongNote(gongnote *models.GongNote) {
 	// check if the gongnote is staged
-	if _, ok := (*backRepo.BackRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote]; ok {
+	if _, ok := backRepo.BackRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote]; ok {
 
-		if id, ok := (*backRepo.BackRepoGongNote.Map_GongNotePtr_GongNoteDBID)[gongnote]; ok {
+		if id, ok := backRepo.BackRepoGongNote.Map_GongNotePtr_GongNoteDBID[gongnote]; ok {
 			var gongnoteDB GongNoteDB
 			gongnoteDB.ID = id
 
-			if err := backRepo.BackRepoGongNote.db.First(&gongnoteDB, id).Error; err != nil {
-				log.Panicln("CheckoutGongNote : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoGongNote.db.First(&gongnoteDB, id); err != nil {
+				log.Fatalln("CheckoutGongNote : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoGongNote.CheckoutPhaseOneInstance(&gongnoteDB)
 			backRepo.BackRepoGongNote.CheckoutPhaseTwoInstance(backRepo, &gongnoteDB)
@@ -382,6 +407,23 @@ func (gongnoteDB *GongNoteDB) CopyBasicFieldsFromGongNote(gongnote *models.GongN
 
 	gongnoteDB.Body_Data.String = gongnote.Body
 	gongnoteDB.Body_Data.Valid = true
+
+	gongnoteDB.BodyHTML_Data.String = gongnote.BodyHTML
+	gongnoteDB.BodyHTML_Data.Valid = true
+}
+
+// CopyBasicFieldsFromGongNote_WOP
+func (gongnoteDB *GongNoteDB) CopyBasicFieldsFromGongNote_WOP(gongnote *models.GongNote_WOP) {
+	// insertion point for fields commit
+
+	gongnoteDB.Name_Data.String = gongnote.Name
+	gongnoteDB.Name_Data.Valid = true
+
+	gongnoteDB.Body_Data.String = gongnote.Body
+	gongnoteDB.Body_Data.Valid = true
+
+	gongnoteDB.BodyHTML_Data.String = gongnote.BodyHTML
+	gongnoteDB.BodyHTML_Data.Valid = true
 }
 
 // CopyBasicFieldsFromGongNoteWOP
@@ -393,6 +435,9 @@ func (gongnoteDB *GongNoteDB) CopyBasicFieldsFromGongNoteWOP(gongnote *GongNoteW
 
 	gongnoteDB.Body_Data.String = gongnote.Body
 	gongnoteDB.Body_Data.Valid = true
+
+	gongnoteDB.BodyHTML_Data.String = gongnote.BodyHTML
+	gongnoteDB.BodyHTML_Data.Valid = true
 }
 
 // CopyBasicFieldsToGongNote
@@ -400,6 +445,15 @@ func (gongnoteDB *GongNoteDB) CopyBasicFieldsToGongNote(gongnote *models.GongNot
 	// insertion point for checkout of basic fields (back repo to stage)
 	gongnote.Name = gongnoteDB.Name_Data.String
 	gongnote.Body = gongnoteDB.Body_Data.String
+	gongnote.BodyHTML = gongnoteDB.BodyHTML_Data.String
+}
+
+// CopyBasicFieldsToGongNote_WOP
+func (gongnoteDB *GongNoteDB) CopyBasicFieldsToGongNote_WOP(gongnote *models.GongNote_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	gongnote.Name = gongnoteDB.Name_Data.String
+	gongnote.Body = gongnoteDB.Body_Data.String
+	gongnote.BodyHTML = gongnoteDB.BodyHTML_Data.String
 }
 
 // CopyBasicFieldsToGongNoteWOP
@@ -408,6 +462,7 @@ func (gongnoteDB *GongNoteDB) CopyBasicFieldsToGongNoteWOP(gongnote *GongNoteWOP
 	// insertion point for checkout of basic fields (back repo to stage)
 	gongnote.Name = gongnoteDB.Name_Data.String
 	gongnote.Body = gongnoteDB.Body_Data.String
+	gongnote.BodyHTML = gongnoteDB.BodyHTML_Data.String
 }
 
 // Backup generates a json file from a slice of all GongNoteDB instances in the backrepo
@@ -418,7 +473,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*GongNoteDB, 0)
-	for _, gongnoteDB := range *backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
+	for _, gongnoteDB := range backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
 		forBackup = append(forBackup, gongnoteDB)
 	}
 
@@ -429,12 +484,12 @@ func (backRepoGongNote *BackRepoGongNoteStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json GongNote ", filename, " ", err.Error())
+		log.Fatal("Cannot json GongNote ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json GongNote file", err.Error())
+		log.Fatal("Cannot write the json GongNote file", err.Error())
 	}
 }
 
@@ -444,7 +499,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*GongNoteDB, 0)
-	for _, gongnoteDB := range *backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
+	for _, gongnoteDB := range backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
 		forBackup = append(forBackup, gongnoteDB)
 	}
 
@@ -454,7 +509,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("GongNote")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -479,13 +534,13 @@ func (backRepoGongNote *BackRepoGongNoteStruct) RestoreXLPhaseOne(file *xlsx.Fil
 	sh, ok := file.Sheet["GongNote"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoGongNote.rowVisitorGongNote)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -505,11 +560,11 @@ func (backRepoGongNote *BackRepoGongNoteStruct) rowVisitorGongNote(row *xlsx.Row
 
 		gongnoteDB_ID_atBackupTime := gongnoteDB.ID
 		gongnoteDB.ID = 0
-		query := backRepoGongNote.db.Create(gongnoteDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoGongNote.db.Create(gongnoteDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[gongnoteDB.ID] = gongnoteDB
+		backRepoGongNote.Map_GongNoteDBID_GongNoteDB[gongnoteDB.ID] = gongnoteDB
 		BackRepoGongNoteid_atBckpTime_newID[gongnoteDB_ID_atBackupTime] = gongnoteDB.ID
 	}
 	return nil
@@ -527,7 +582,7 @@ func (backRepoGongNote *BackRepoGongNoteStruct) RestorePhaseOne(dirPath string) 
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json GongNote file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json GongNote file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -542,16 +597,16 @@ func (backRepoGongNote *BackRepoGongNoteStruct) RestorePhaseOne(dirPath string) 
 
 		gongnoteDB_ID_atBackupTime := gongnoteDB.ID
 		gongnoteDB.ID = 0
-		query := backRepoGongNote.db.Create(gongnoteDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoGongNote.db.Create(gongnoteDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoGongNote.Map_GongNoteDBID_GongNoteDB)[gongnoteDB.ID] = gongnoteDB
+		backRepoGongNote.Map_GongNoteDBID_GongNoteDB[gongnoteDB.ID] = gongnoteDB
 		BackRepoGongNoteid_atBckpTime_newID[gongnoteDB_ID_atBackupTime] = gongnoteDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json GongNote file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json GongNote file", err.Error())
 	}
 }
 
@@ -559,19 +614,44 @@ func (backRepoGongNote *BackRepoGongNoteStruct) RestorePhaseOne(dirPath string) 
 // to compute new index
 func (backRepoGongNote *BackRepoGongNoteStruct) RestorePhaseTwo() {
 
-	for _, gongnoteDB := range *backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
+	for _, gongnoteDB := range backRepoGongNote.Map_GongNoteDBID_GongNoteDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = gongnoteDB
 
 		// insertion point for reindexing pointers encoding
 		// update databse with new index encoding
-		query := backRepoGongNote.db.Model(gongnoteDB).Updates(*gongnoteDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoGongNote.db.Model(gongnoteDB)
+		_, err := db.Updates(*gongnoteDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoGongNote.ResetReversePointers commits all staged instances of GongNote to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoGongNote *BackRepoGongNoteStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, gongnote := range backRepoGongNote.Map_GongNoteDBID_GongNotePtr {
+		backRepoGongNote.ResetReversePointersInstance(backRepo, idx, gongnote)
+	}
+
+	return
+}
+
+func (backRepoGongNote *BackRepoGongNoteStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, gongnote *models.GongNote) (Error error) {
+
+	// fetch matching gongnoteDB
+	if gongnoteDB, ok := backRepoGongNote.Map_GongNoteDBID_GongNoteDB[idx]; ok {
+		_ = gongnoteDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongdoc/go/db"
 	"github.com/fullstack-lang/gongdoc/go/models"
 )
 
@@ -35,15 +36,16 @@ var dummy_Vertice_sort sort.Float64Slice
 type VerticeAPI struct {
 	gorm.Model
 
-	models.Vertice
+	models.Vertice_WOP
 
 	// encoding of pointers
-	VerticePointersEnconding
+	// for API, it cannot be embedded
+	VerticePointersEncoding VerticePointersEncoding
 }
 
-// VerticePointersEnconding encodes pointers to Struct and
+// VerticePointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type VerticePointersEnconding struct {
+type VerticePointersEncoding struct {
 	// insertion for pointer fields encoding declaration
 }
 
@@ -66,8 +68,10 @@ type VerticeDB struct {
 
 	// Declation for basic field verticeDB.Name
 	Name_Data sql.NullString
+
 	// encoding of pointers
-	VerticePointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	VerticePointersEncoding
 }
 
 // VerticeDBs arrays verticeDBs
@@ -105,56 +109,32 @@ var Vertice_Fields = []string{
 
 type BackRepoVerticeStruct struct {
 	// stores VerticeDB according to their gorm ID
-	Map_VerticeDBID_VerticeDB *map[uint]*VerticeDB
+	Map_VerticeDBID_VerticeDB map[uint]*VerticeDB
 
 	// stores VerticeDB ID according to Vertice address
-	Map_VerticePtr_VerticeDBID *map[*models.Vertice]uint
+	Map_VerticePtr_VerticeDBID map[*models.Vertice]uint
 
 	// stores Vertice according to their gorm ID
-	Map_VerticeDBID_VerticePtr *map[uint]*models.Vertice
+	Map_VerticeDBID_VerticePtr map[uint]*models.Vertice
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoVertice *BackRepoVerticeStruct) GetDB() *gorm.DB {
+func (backRepoVertice *BackRepoVerticeStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoVertice.stage
+	return
+}
+
+func (backRepoVertice *BackRepoVerticeStruct) GetDB() db.DBInterface {
 	return backRepoVertice.db
 }
 
 // GetVerticeDBFromVerticePtr is a handy function to access the back repo instance from the stage instance
 func (backRepoVertice *BackRepoVerticeStruct) GetVerticeDBFromVerticePtr(vertice *models.Vertice) (verticeDB *VerticeDB) {
-	id := (*backRepoVertice.Map_VerticePtr_VerticeDBID)[vertice]
-	verticeDB = (*backRepoVertice.Map_VerticeDBID_VerticeDB)[id]
-	return
-}
-
-// BackRepoVertice.Init set up the BackRepo of the Vertice
-func (backRepoVertice *BackRepoVerticeStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoVertice.Map_VerticeDBID_VerticePtr != nil {
-		err := errors.New("In Init, backRepoVertice.Map_VerticeDBID_VerticePtr should be nil")
-		return err
-	}
-
-	if backRepoVertice.Map_VerticeDBID_VerticeDB != nil {
-		err := errors.New("In Init, backRepoVertice.Map_VerticeDBID_VerticeDB should be nil")
-		return err
-	}
-
-	if backRepoVertice.Map_VerticePtr_VerticeDBID != nil {
-		err := errors.New("In Init, backRepoVertice.Map_VerticePtr_VerticeDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.Vertice, 0)
-	backRepoVertice.Map_VerticeDBID_VerticePtr = &tmp
-
-	tmpDB := make(map[uint]*VerticeDB, 0)
-	backRepoVertice.Map_VerticeDBID_VerticeDB = &tmpDB
-
-	tmpID := make(map[*models.Vertice]uint, 0)
-	backRepoVertice.Map_VerticePtr_VerticeDBID = &tmpID
-
-	backRepoVertice.db = db
+	id := backRepoVertice.Map_VerticePtr_VerticeDBID[vertice]
+	verticeDB = backRepoVertice.Map_VerticeDBID_VerticeDB[id]
 	return
 }
 
@@ -168,7 +148,7 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseOne(stage *models.Stage
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, vertice := range *backRepoVertice.Map_VerticeDBID_VerticePtr {
+	for id, vertice := range backRepoVertice.Map_VerticeDBID_VerticePtr {
 		if _, ok := stage.Vertices[vertice]; !ok {
 			backRepoVertice.CommitDeleteInstance(id)
 		}
@@ -180,19 +160,20 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseOne(stage *models.Stage
 // BackRepoVertice.CommitDeleteInstance commits deletion of Vertice to the BackRepo
 func (backRepoVertice *BackRepoVerticeStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	vertice := (*backRepoVertice.Map_VerticeDBID_VerticePtr)[id]
+	vertice := backRepoVertice.Map_VerticeDBID_VerticePtr[id]
 
 	// vertice is not staged anymore, remove verticeDB
-	verticeDB := (*backRepoVertice.Map_VerticeDBID_VerticeDB)[id]
-	query := backRepoVertice.db.Unscoped().Delete(&verticeDB)
-	if query.Error != nil {
-		return query.Error
+	verticeDB := backRepoVertice.Map_VerticeDBID_VerticeDB[id]
+	db, _ := backRepoVertice.db.Unscoped()
+	_, err := db.Delete(verticeDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoVertice.Map_VerticePtr_VerticeDBID), vertice)
-	delete((*backRepoVertice.Map_VerticeDBID_VerticePtr), id)
-	delete((*backRepoVertice.Map_VerticeDBID_VerticeDB), id)
+	delete(backRepoVertice.Map_VerticePtr_VerticeDBID, vertice)
+	delete(backRepoVertice.Map_VerticeDBID_VerticePtr, id)
+	delete(backRepoVertice.Map_VerticeDBID_VerticeDB, id)
 
 	return
 }
@@ -202,7 +183,7 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitDeleteInstance(id uint) (Err
 func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseOneInstance(vertice *models.Vertice) (Error error) {
 
 	// check if the vertice is not commited yet
-	if _, ok := (*backRepoVertice.Map_VerticePtr_VerticeDBID)[vertice]; ok {
+	if _, ok := backRepoVertice.Map_VerticePtr_VerticeDBID[vertice]; ok {
 		return
 	}
 
@@ -210,15 +191,15 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseOneInstance(vertice *mo
 	var verticeDB VerticeDB
 	verticeDB.CopyBasicFieldsFromVertice(vertice)
 
-	query := backRepoVertice.db.Create(&verticeDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoVertice.db.Create(&verticeDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoVertice.Map_VerticePtr_VerticeDBID)[vertice] = verticeDB.ID
-	(*backRepoVertice.Map_VerticeDBID_VerticePtr)[verticeDB.ID] = vertice
-	(*backRepoVertice.Map_VerticeDBID_VerticeDB)[verticeDB.ID] = &verticeDB
+	backRepoVertice.Map_VerticePtr_VerticeDBID[vertice] = verticeDB.ID
+	backRepoVertice.Map_VerticeDBID_VerticePtr[verticeDB.ID] = vertice
+	backRepoVertice.Map_VerticeDBID_VerticeDB[verticeDB.ID] = &verticeDB
 
 	return
 }
@@ -227,7 +208,7 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseOneInstance(vertice *mo
 // Phase Two is the update of instance with the field in the database
 func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, vertice := range *backRepoVertice.Map_VerticeDBID_VerticePtr {
+	for idx, vertice := range backRepoVertice.Map_VerticeDBID_VerticePtr {
 		backRepoVertice.CommitPhaseTwoInstance(backRepo, idx, vertice)
 	}
 
@@ -239,14 +220,14 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseTwo(backRepo *BackRepoS
 func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, vertice *models.Vertice) (Error error) {
 
 	// fetch matching verticeDB
-	if verticeDB, ok := (*backRepoVertice.Map_VerticeDBID_VerticeDB)[idx]; ok {
+	if verticeDB, ok := backRepoVertice.Map_VerticeDBID_VerticeDB[idx]; ok {
 
 		verticeDB.CopyBasicFieldsFromVertice(vertice)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoVertice.db.Save(&verticeDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoVertice.db.Save(verticeDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -261,20 +242,19 @@ func (backRepoVertice *BackRepoVerticeStruct) CommitPhaseTwoInstance(backRepo *B
 // BackRepoVertice.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseOne() (Error error) {
 
 	verticeDBArray := make([]VerticeDB, 0)
-	query := backRepoVertice.db.Find(&verticeDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoVertice.db.Find(&verticeDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	verticeInstancesToBeRemovedFromTheStage := make(map[*models.Vertice]any)
-	for key, value := range models.Stage.Vertices {
+	for key, value := range backRepoVertice.stage.Vertices {
 		verticeInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -284,7 +264,7 @@ func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseOne() (Error error) {
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		vertice, ok := (*backRepoVertice.Map_VerticeDBID_VerticePtr)[verticeDB.ID]
+		vertice, ok := backRepoVertice.Map_VerticeDBID_VerticePtr[verticeDB.ID]
 		if ok {
 			delete(verticeInstancesToBeRemovedFromTheStage, vertice)
 		}
@@ -292,13 +272,13 @@ func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseOne() (Error error) {
 
 	// remove from stage and back repo's 3 maps all vertices that are not in the checkout
 	for vertice := range verticeInstancesToBeRemovedFromTheStage {
-		vertice.Unstage()
+		vertice.Unstage(backRepoVertice.GetStage())
 
 		// remove instance from the back repo 3 maps
-		verticeID := (*backRepoVertice.Map_VerticePtr_VerticeDBID)[vertice]
-		delete((*backRepoVertice.Map_VerticePtr_VerticeDBID), vertice)
-		delete((*backRepoVertice.Map_VerticeDBID_VerticeDB), verticeID)
-		delete((*backRepoVertice.Map_VerticeDBID_VerticePtr), verticeID)
+		verticeID := backRepoVertice.Map_VerticePtr_VerticeDBID[vertice]
+		delete(backRepoVertice.Map_VerticePtr_VerticeDBID, vertice)
+		delete(backRepoVertice.Map_VerticeDBID_VerticeDB, verticeID)
+		delete(backRepoVertice.Map_VerticeDBID_VerticePtr, verticeID)
 	}
 
 	return
@@ -308,24 +288,27 @@ func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseOne() (Error error) {
 // models version of the verticeDB
 func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseOneInstance(verticeDB *VerticeDB) (Error error) {
 
-	vertice, ok := (*backRepoVertice.Map_VerticeDBID_VerticePtr)[verticeDB.ID]
+	vertice, ok := backRepoVertice.Map_VerticeDBID_VerticePtr[verticeDB.ID]
 	if !ok {
 		vertice = new(models.Vertice)
 
-		(*backRepoVertice.Map_VerticeDBID_VerticePtr)[verticeDB.ID] = vertice
-		(*backRepoVertice.Map_VerticePtr_VerticeDBID)[vertice] = verticeDB.ID
+		backRepoVertice.Map_VerticeDBID_VerticePtr[verticeDB.ID] = vertice
+		backRepoVertice.Map_VerticePtr_VerticeDBID[vertice] = verticeDB.ID
 
 		// append model store with the new element
 		vertice.Name = verticeDB.Name_Data.String
-		vertice.Stage()
+		vertice.Stage(backRepoVertice.GetStage())
 	}
 	verticeDB.CopyBasicFieldsToVertice(vertice)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	vertice.Stage(backRepoVertice.GetStage())
 
 	// preserve pointer to verticeDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_VerticeDBID_VerticeDB)[verticeDB hold variable pointers
 	verticeDB_Data := *verticeDB
 	preservedPtrToVertice := &verticeDB_Data
-	(*backRepoVertice.Map_VerticeDBID_VerticeDB)[verticeDB.ID] = preservedPtrToVertice
+	backRepoVertice.Map_VerticeDBID_VerticeDB[verticeDB.ID] = preservedPtrToVertice
 
 	return
 }
@@ -335,7 +318,7 @@ func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseOneInstance(verticeDB
 func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, verticeDB := range *backRepoVertice.Map_VerticeDBID_VerticeDB {
+	for _, verticeDB := range backRepoVertice.Map_VerticeDBID_VerticeDB {
 		backRepoVertice.CheckoutPhaseTwoInstance(backRepo, verticeDB)
 	}
 	return
@@ -345,8 +328,14 @@ func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseTwo(backRepo *BackRep
 // Phase Two is the update of instance with the field in the database
 func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, verticeDB *VerticeDB) (Error error) {
 
-	vertice := (*backRepoVertice.Map_VerticeDBID_VerticePtr)[verticeDB.ID]
-	_ = vertice // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	vertice := backRepoVertice.Map_VerticeDBID_VerticePtr[verticeDB.ID]
+
+	verticeDB.DecodePointers(backRepo, vertice)
+
+	return
+}
+
+func (verticeDB *VerticeDB) DecodePointers(backRepo *BackRepoStruct, vertice *models.Vertice) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -355,7 +344,7 @@ func (backRepoVertice *BackRepoVerticeStruct) CheckoutPhaseTwoInstance(backRepo 
 // CommitVertice allows commit of a single vertice (if already staged)
 func (backRepo *BackRepoStruct) CommitVertice(vertice *models.Vertice) {
 	backRepo.BackRepoVertice.CommitPhaseOneInstance(vertice)
-	if id, ok := (*backRepo.BackRepoVertice.Map_VerticePtr_VerticeDBID)[vertice]; ok {
+	if id, ok := backRepo.BackRepoVertice.Map_VerticePtr_VerticeDBID[vertice]; ok {
 		backRepo.BackRepoVertice.CommitPhaseTwoInstance(backRepo, id, vertice)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -364,14 +353,14 @@ func (backRepo *BackRepoStruct) CommitVertice(vertice *models.Vertice) {
 // CommitVertice allows checkout of a single vertice (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutVertice(vertice *models.Vertice) {
 	// check if the vertice is staged
-	if _, ok := (*backRepo.BackRepoVertice.Map_VerticePtr_VerticeDBID)[vertice]; ok {
+	if _, ok := backRepo.BackRepoVertice.Map_VerticePtr_VerticeDBID[vertice]; ok {
 
-		if id, ok := (*backRepo.BackRepoVertice.Map_VerticePtr_VerticeDBID)[vertice]; ok {
+		if id, ok := backRepo.BackRepoVertice.Map_VerticePtr_VerticeDBID[vertice]; ok {
 			var verticeDB VerticeDB
 			verticeDB.ID = id
 
-			if err := backRepo.BackRepoVertice.db.First(&verticeDB, id).Error; err != nil {
-				log.Panicln("CheckoutVertice : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoVertice.db.First(&verticeDB, id); err != nil {
+				log.Fatalln("CheckoutVertice : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoVertice.CheckoutPhaseOneInstance(&verticeDB)
 			backRepo.BackRepoVertice.CheckoutPhaseTwoInstance(backRepo, &verticeDB)
@@ -381,6 +370,20 @@ func (backRepo *BackRepoStruct) CheckoutVertice(vertice *models.Vertice) {
 
 // CopyBasicFieldsFromVertice
 func (verticeDB *VerticeDB) CopyBasicFieldsFromVertice(vertice *models.Vertice) {
+	// insertion point for fields commit
+
+	verticeDB.X_Data.Float64 = vertice.X
+	verticeDB.X_Data.Valid = true
+
+	verticeDB.Y_Data.Float64 = vertice.Y
+	verticeDB.Y_Data.Valid = true
+
+	verticeDB.Name_Data.String = vertice.Name
+	verticeDB.Name_Data.Valid = true
+}
+
+// CopyBasicFieldsFromVertice_WOP
+func (verticeDB *VerticeDB) CopyBasicFieldsFromVertice_WOP(vertice *models.Vertice_WOP) {
 	// insertion point for fields commit
 
 	verticeDB.X_Data.Float64 = vertice.X
@@ -415,6 +418,14 @@ func (verticeDB *VerticeDB) CopyBasicFieldsToVertice(vertice *models.Vertice) {
 	vertice.Name = verticeDB.Name_Data.String
 }
 
+// CopyBasicFieldsToVertice_WOP
+func (verticeDB *VerticeDB) CopyBasicFieldsToVertice_WOP(vertice *models.Vertice_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	vertice.X = verticeDB.X_Data.Float64
+	vertice.Y = verticeDB.Y_Data.Float64
+	vertice.Name = verticeDB.Name_Data.String
+}
+
 // CopyBasicFieldsToVerticeWOP
 func (verticeDB *VerticeDB) CopyBasicFieldsToVerticeWOP(vertice *VerticeWOP) {
 	vertice.ID = int(verticeDB.ID)
@@ -432,7 +443,7 @@ func (backRepoVertice *BackRepoVerticeStruct) Backup(dirPath string) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*VerticeDB, 0)
-	for _, verticeDB := range *backRepoVertice.Map_VerticeDBID_VerticeDB {
+	for _, verticeDB := range backRepoVertice.Map_VerticeDBID_VerticeDB {
 		forBackup = append(forBackup, verticeDB)
 	}
 
@@ -443,12 +454,12 @@ func (backRepoVertice *BackRepoVerticeStruct) Backup(dirPath string) {
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json Vertice ", filename, " ", err.Error())
+		log.Fatal("Cannot json Vertice ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json Vertice file", err.Error())
+		log.Fatal("Cannot write the json Vertice file", err.Error())
 	}
 }
 
@@ -458,7 +469,7 @@ func (backRepoVertice *BackRepoVerticeStruct) BackupXL(file *xlsx.File) {
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*VerticeDB, 0)
-	for _, verticeDB := range *backRepoVertice.Map_VerticeDBID_VerticeDB {
+	for _, verticeDB := range backRepoVertice.Map_VerticeDBID_VerticeDB {
 		forBackup = append(forBackup, verticeDB)
 	}
 
@@ -468,7 +479,7 @@ func (backRepoVertice *BackRepoVerticeStruct) BackupXL(file *xlsx.File) {
 
 	sh, err := file.AddSheet("Vertice")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -493,13 +504,13 @@ func (backRepoVertice *BackRepoVerticeStruct) RestoreXLPhaseOne(file *xlsx.File)
 	sh, ok := file.Sheet["Vertice"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoVertice.rowVisitorVertice)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -519,11 +530,11 @@ func (backRepoVertice *BackRepoVerticeStruct) rowVisitorVertice(row *xlsx.Row) e
 
 		verticeDB_ID_atBackupTime := verticeDB.ID
 		verticeDB.ID = 0
-		query := backRepoVertice.db.Create(verticeDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoVertice.db.Create(verticeDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoVertice.Map_VerticeDBID_VerticeDB)[verticeDB.ID] = verticeDB
+		backRepoVertice.Map_VerticeDBID_VerticeDB[verticeDB.ID] = verticeDB
 		BackRepoVerticeid_atBckpTime_newID[verticeDB_ID_atBackupTime] = verticeDB.ID
 	}
 	return nil
@@ -541,7 +552,7 @@ func (backRepoVertice *BackRepoVerticeStruct) RestorePhaseOne(dirPath string) {
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json Vertice file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json Vertice file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -556,16 +567,16 @@ func (backRepoVertice *BackRepoVerticeStruct) RestorePhaseOne(dirPath string) {
 
 		verticeDB_ID_atBackupTime := verticeDB.ID
 		verticeDB.ID = 0
-		query := backRepoVertice.db.Create(verticeDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoVertice.db.Create(verticeDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoVertice.Map_VerticeDBID_VerticeDB)[verticeDB.ID] = verticeDB
+		backRepoVertice.Map_VerticeDBID_VerticeDB[verticeDB.ID] = verticeDB
 		BackRepoVerticeid_atBckpTime_newID[verticeDB_ID_atBackupTime] = verticeDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json Vertice file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json Vertice file", err.Error())
 	}
 }
 
@@ -573,19 +584,44 @@ func (backRepoVertice *BackRepoVerticeStruct) RestorePhaseOne(dirPath string) {
 // to compute new index
 func (backRepoVertice *BackRepoVerticeStruct) RestorePhaseTwo() {
 
-	for _, verticeDB := range *backRepoVertice.Map_VerticeDBID_VerticeDB {
+	for _, verticeDB := range backRepoVertice.Map_VerticeDBID_VerticeDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = verticeDB
 
 		// insertion point for reindexing pointers encoding
 		// update databse with new index encoding
-		query := backRepoVertice.db.Model(verticeDB).Updates(*verticeDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoVertice.db.Model(verticeDB)
+		_, err := db.Updates(*verticeDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoVertice.ResetReversePointers commits all staged instances of Vertice to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoVertice *BackRepoVerticeStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, vertice := range backRepoVertice.Map_VerticeDBID_VerticePtr {
+		backRepoVertice.ResetReversePointersInstance(backRepo, idx, vertice)
+	}
+
+	return
+}
+
+func (backRepoVertice *BackRepoVerticeStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, vertice *models.Vertice) (Error error) {
+
+	// fetch matching verticeDB
+	if verticeDB, ok := backRepoVertice.Map_VerticeDBID_VerticeDB[idx]; ok {
+		_ = verticeDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.

@@ -14,13 +14,33 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
-	sheetEnding           = `</sheetData></worksheet>`
 	fixedCellRefChar      = "$"
 	cellRangeChar         = ":"
 	externalSheetBangChar = "!"
+)
+
+var (
+	tokPool = sync.Pool{
+		New: func() interface{} {
+			return &xml.StartElement{}
+		},
+	}
+
+	xlsxSIPool = sync.Pool{
+		New: func() interface{} {
+			return &xlsxSI{}
+		},
+	}
+
+	xmlAttrPool = sync.Pool{
+		New: func() interface{} {
+			return &xml.Attr{}
+		},
+	}
 )
 
 // XLSXReaderError is the standard error type for otherwise undefined
@@ -42,18 +62,18 @@ func getRangeFromString(rangeString string) (lower int, upper int, error error) 
 	var parts []string
 	parts = strings.SplitN(rangeString, cellRangeChar, 2)
 	if parts[0] == "" {
-		error = errors.New(fmt.Sprintf("Invalid range '%s'\n", rangeString))
+		error = fmt.Errorf("Invalid range '%s'\n", rangeString)
 	}
 	if parts[1] == "" {
-		error = errors.New(fmt.Sprintf("Invalid range '%s'\n", rangeString))
+		error = fmt.Errorf("Invalid range '%s'\n", rangeString)
 	}
 	lower, error = strconv.Atoi(parts[0])
 	if error != nil {
-		error = errors.New(fmt.Sprintf("Invalid range (not integer in lower bound) %s\n", rangeString))
+		error = fmt.Errorf("Invalid range (not integer in lower bound) %s\n", rangeString)
 	}
 	upper, error = strconv.Atoi(parts[1])
 	if error != nil {
-		error = errors.New(fmt.Sprintf("Invalid range (not integer in upper bound) %s\n", rangeString))
+		error = fmt.Errorf("Invalid range (not integer in upper bound) %s\n", rangeString)
 	}
 	return lower, upper, error
 }
@@ -648,6 +668,8 @@ func makeHyperlinkTable(worksheet *xlsxWorksheet, fi *File, rsheet *xlsxSheet) (
 			if err != nil {
 				return wrap(fmt.Errorf("file.Open: %w", err))
 			}
+			defer rc.Close()
+
 			decoder := xml.NewDecoder(rc)
 			err = decoder.Decode(worksheetRels)
 			if err != nil {
@@ -701,7 +723,7 @@ func makeHyperlinkTable(worksheet *xlsxWorksheet, fi *File, rsheet *xlsxSheet) (
 func readSheetFromFile(rsheet xlsxSheet, fi *File, sheetXMLMap map[string]string, rowLimit, colLimit int, valueOnly bool) (sheet *Sheet, errRes error) {
 	defer func() {
 		if x := recover(); x != nil {
-			errRes = errors.New(fmt.Sprintf("%v\n%s\n", x, debug.Stack()))
+			errRes = fmt.Errorf("%v\n%s\n", x, debug.Stack())
 		}
 	}()
 
@@ -734,7 +756,13 @@ func readSheetFromFile(rsheet xlsxSheet, fi *File, sheetXMLMap map[string]string
 	sheet.SheetViews = readSheetViews(worksheet.SheetViews)
 	if worksheet.AutoFilter != nil {
 		autoFilterBounds := strings.Split(worksheet.AutoFilter.Ref, ":")
-		sheet.AutoFilter = &AutoFilter{autoFilterBounds[0], autoFilterBounds[1]}
+
+		bottomRightCell := autoFilterBounds[0]
+		if len(autoFilterBounds) > 1 {
+			bottomRightCell = autoFilterBounds[1]
+		}
+
+		sheet.AutoFilter = &AutoFilter{autoFilterBounds[0], bottomRightCell}
 	}
 
 	sheet.SheetFormat.DefaultColWidth = worksheet.SheetFormatPr.DefaultColWidth
@@ -770,6 +798,8 @@ func readSheetsFromZipFile(f *zip.File, file *File, sheetXMLMap map[string]strin
 	if err != nil {
 		return wrap(fmt.Errorf("file.Open: %w", err))
 	}
+	defer rc.Close()
+
 	decoder = xml.NewDecoder(rc)
 	err = decoder.Decode(workbook)
 	if err != nil {
@@ -807,30 +837,133 @@ func readSheetsFromZipFile(f *zip.File, file *File, sheetXMLMap map[string]strin
 		}()
 	}
 
+	var sb strings.Builder
+	errFound := false
+	err = nil
 	for j := 0; j < sheetCount; j++ {
 		sheet := <-sheetChan
 		if sheet == nil {
-			return wrap(fmt.Errorf("No sheet returnded from readSheetFromFile"))
+			errFound = true
+			sb.WriteString("{SheetIndex: ")
+			sb.WriteString(strconv.Itoa(j))
+			sb.WriteString("} No sheet returned from readSheetFromFile\n")
 		}
 		if sheet.Error != nil {
-			return wrap(sheet.Error)
+			errFound = true
+			sb.WriteString("{SheetIndex: ")
+			sb.WriteString(strconv.Itoa(sheet.Index))
+			sb.WriteString("} ")
+			sb.WriteString(sheet.Error.Error())
 		}
 		sheetName := sheet.Sheet.Name
 		sheetsByName[sheetName] = sheet.Sheet
 		sheets[sheet.Index] = sheet.Sheet
 	}
-	return sheetsByName, sheets, nil
+	close(sheetChan)
+	if errFound {
+		err = fmt.Errorf(sb.String())
+	}
+	return sheetsByName, sheets, err
+}
+
+func readSharedStrings(rc io.Reader) (*RefTable, error) {
+	var err error
+	var decoder *xml.Decoder
+	var reftable *RefTable
+	var tok xml.Token
+	var count int
+	var countS string
+	var ok bool
+	var si *xlsxSI
+	var attr *xml.Attr
+
+	wrap := func(err error) (*RefTable, error) {
+		return nil, fmt.Errorf("readSharedStrings: %w", err)
+	}
+
+	decoder = xml.NewDecoder(rc)
+
+	for {
+		tok = tokPool.Get().(xml.Token)
+		tok, err = decoder.Token()
+		if tok == nil {
+			break
+		} else if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return wrap(err)
+		}
+		switch ty := tok.(type) {
+		case xml.StartElement:
+			switch ty.Name.Local {
+			case "sst":
+				attr = xmlAttrPool.Get().(*xml.Attr)
+				ok = false
+				for _, (*attr) = range ty.Attr {
+					if attr.Name.Local == "count" {
+						countS = attr.Value
+						ok = true
+						break
+					}
+				}
+				xmlAttrPool.Put(attr)
+				if !ok {
+					// No hints on the size, so we'll just start with
+					// a decent number of entries to avoid small
+					// allocs.
+					reftable = NewSharedStringRefTable(DEFAULT_REFTABLE_SIZE)
+					reftable.isWrite = false //Todo, do we actually use this?
+				} else {
+					count, err = strconv.Atoi(countS)
+					if err != nil {
+						return wrap(err)
+					}
+					reftable = NewSharedStringRefTable(count)
+					reftable.isWrite = false //Todo, do we actually use this?
+				}
+			case "si":
+				if reftable == nil {
+					return wrap(fmt.Errorf("si encountered before reftable created"))
+				}
+				si = xlsxSIPool.Get().(*xlsxSI)
+				if err = decoder.DecodeElement(si, &ty); err != nil {
+					xlsxSIPool.Put(si)
+					return wrap(err)
+				}
+				if len(si.R) > 0 {
+					reftable.AddRichText(xmlToRichText(si.R))
+				} else {
+					reftable.AddString(si.T.getText())
+				}
+				// clean up before returning to the pool, without
+				// these lines you'll see weird effects when reading
+				// another set of shared strings
+				si.R = nil
+				si.T = nil
+				xlsxSIPool.Put(si)
+			default:
+				// Do nothing
+			}
+		default:
+			// Do nothing
+		}
+		tokPool.Put(tok)
+	}
+
+	if reftable == nil {
+		panic("Unitialised reftable")
+	}
+	return reftable, nil
+
 }
 
 // readSharedStringsFromZipFile() is an internal helper function to
 // extract a reference table from the sharedStrings.xml file within
 // the XLSX zip file.
 func readSharedStringsFromZipFile(f *zip.File) (*RefTable, error) {
-	var sst *xlsxSST
 	var err error
 	var rc io.ReadCloser
-	var decoder *xml.Decoder
-	var reftable *RefTable
 
 	wrap := func(err error) (*RefTable, error) {
 		return nil, fmt.Errorf("readSharedStringsFromZipFile: %w", err)
@@ -846,14 +979,8 @@ func readSharedStringsFromZipFile(f *zip.File) (*RefTable, error) {
 	if err != nil {
 		return wrap(err)
 	}
-	sst = new(xlsxSST)
-	decoder = xml.NewDecoder(rc)
-	err = decoder.Decode(sst)
-	if err != nil {
-		return wrap(err)
-	}
-	reftable = MakeSharedStringRefTable(sst)
-	return reftable, nil
+	defer rc.Close()
+	return readSharedStrings(rc)
 }
 
 // readStylesFromZipFile() is an internal helper function to
@@ -873,6 +1000,8 @@ func readStylesFromZipFile(f *zip.File, theme *theme) (*xlsxStyleSheet, error) {
 	if err != nil {
 		return wrap(err)
 	}
+	defer rc.Close()
+
 	style = newXlsxStyleSheet(theme)
 	decoder = xml.NewDecoder(rc)
 	err = decoder.Decode(style)
@@ -902,6 +1031,7 @@ func readThemeFromZipFile(f *zip.File) (*theme, error) {
 	if err != nil {
 		return wrap(err)
 	}
+	defer rc.Close()
 
 	var themeXml xlsxTheme
 	err = xml.NewDecoder(rc).Decode(&themeXml)
@@ -972,6 +1102,8 @@ func readWorkbookRelationsFromZipFile(workbookRels *zip.File) (WorkBookRels, err
 	if err != nil {
 		return wrap(err)
 	}
+	defer rc.Close()
+
 	decoder = xml.NewDecoder(rc)
 	wbRelationships = new(xlsxWorkbookRels)
 	err = decoder.Decode(wbRelationships)
@@ -1112,12 +1244,23 @@ func truncateSheetXML(r io.Reader, rowLimit int) (io.Reader, error) {
 	r = io.TeeReader(r, output)
 	decoder := xml.NewDecoder(r)
 
+	var ns string
 	for {
 		token, readErr = decoder.Token()
 		if readErr == io.EOF {
 			break
 		} else if readErr != nil {
 			return nil, readErr
+		}
+		if start, ok := token.(xml.StartElement); ok && start.Name.Local == "worksheet" && start.Name.Space != "" {
+			namespace := start.Name.Space
+			// find if the namespace has a short name
+			for _, attr := range start.Attr {
+				if attr.Name.Space == "xmlns" && attr.Value == namespace {
+					ns = attr.Name.Local
+					break
+				}
+			}
 		}
 		end, ok := token.(xml.EndElement)
 		if ok && end.Name.Local == "row" {
@@ -1132,6 +1275,10 @@ func truncateSheetXML(r io.Reader, rowLimit int) (io.Reader, error) {
 	output.Truncate(int(offset))
 
 	if readErr != io.EOF {
+		sheetEnding := `</sheetData></worksheet>`
+		if ns != "" {
+			sheetEnding = fmt.Sprintf(`</%s:sheetData></%s:worksheet>`, ns, ns)
+		}
 		_, err := output.Write([]byte(sheetEnding))
 		if err != nil {
 			return nil, err
@@ -1150,8 +1297,8 @@ func truncateSheetXMLValueOnly(r io.Reader) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
-	rowRegexp, _ := regexp.Compile(`(?s)<row .*?</row>`)
-	cellRegexp, _ := regexp.Compile(`(?s)<c .*?/[>|c>]`)
+	rowRegexp, _ := regexp.Compile(`(?s)<row>?.*?</row>`)
+	cellRegexp, _ := regexp.Compile(`(?s)<c>?.*?/.*?>`)
 	valueRegexp, _ := regexp.Compile(`(?s)<v>.*?</v>`)
 	mergerRegexp, _ := regexp.Compile(`<mergeCell ref="[A-Z0-9]+:[A-Z0-9]+"/>`)
 	dimensionRegexp, _ := regexp.Compile(`<dimension ref="[A-Z]+[0-9]+:[A-Z]+[0-9]+"/>`)
@@ -1184,6 +1331,7 @@ func truncateSheetXMLValueOnly(r io.Reader) (io.Reader, error) {
 			rowMatch = rowRegexp.ReplaceAll(rowMatch, nil)
 		}
 		rowMatch = cellRegexp.ReplaceAllFunc(rowMatch, func(cellMatch []byte) []byte {
+
 			if !valueRegexp.Match(cellMatch) {
 				cellMatch = cellRegexp.ReplaceAll(cellMatch, nil)
 			} else {

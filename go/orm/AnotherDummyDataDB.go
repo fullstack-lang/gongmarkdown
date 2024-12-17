@@ -17,6 +17,7 @@ import (
 
 	"github.com/tealeg/xlsx/v3"
 
+	"github.com/fullstack-lang/gongmarkdown/go/db"
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
 
@@ -35,15 +36,16 @@ var dummy_AnotherDummyData_sort sort.Float64Slice
 type AnotherDummyDataAPI struct {
 	gorm.Model
 
-	models.AnotherDummyData
+	models.AnotherDummyData_WOP
 
 	// encoding of pointers
-	AnotherDummyDataPointersEnconding
+	// for API, it cannot be embedded
+	AnotherDummyDataPointersEncoding AnotherDummyDataPointersEncoding
 }
 
-// AnotherDummyDataPointersEnconding encodes pointers to Struct and
+// AnotherDummyDataPointersEncoding encodes pointers to Struct and
 // reverse pointers of slice of poitners to Struct
-type AnotherDummyDataPointersEnconding struct {
+type AnotherDummyDataPointersEncoding struct {
 	// insertion for pointer fields encoding declaration
 }
 
@@ -60,8 +62,10 @@ type AnotherDummyDataDB struct {
 
 	// Declation for basic field anotherdummydataDB.Name
 	Name_Data sql.NullString
+
 	// encoding of pointers
-	AnotherDummyDataPointersEnconding
+	// for GORM serialization, it is necessary to embed to Pointer Encoding declaration
+	AnotherDummyDataPointersEncoding
 }
 
 // AnotherDummyDataDBs arrays anotherdummydataDBs
@@ -93,56 +97,32 @@ var AnotherDummyData_Fields = []string{
 
 type BackRepoAnotherDummyDataStruct struct {
 	// stores AnotherDummyDataDB according to their gorm ID
-	Map_AnotherDummyDataDBID_AnotherDummyDataDB *map[uint]*AnotherDummyDataDB
+	Map_AnotherDummyDataDBID_AnotherDummyDataDB map[uint]*AnotherDummyDataDB
 
 	// stores AnotherDummyDataDB ID according to AnotherDummyData address
-	Map_AnotherDummyDataPtr_AnotherDummyDataDBID *map[*models.AnotherDummyData]uint
+	Map_AnotherDummyDataPtr_AnotherDummyDataDBID map[*models.AnotherDummyData]uint
 
 	// stores AnotherDummyData according to their gorm ID
-	Map_AnotherDummyDataDBID_AnotherDummyDataPtr *map[uint]*models.AnotherDummyData
+	Map_AnotherDummyDataDBID_AnotherDummyDataPtr map[uint]*models.AnotherDummyData
 
-	db *gorm.DB
+	db db.DBInterface
+
+	stage *models.StageStruct
 }
 
-func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) GetDB() *gorm.DB {
+func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) GetStage() (stage *models.StageStruct) {
+	stage = backRepoAnotherDummyData.stage
+	return
+}
+
+func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) GetDB() db.DBInterface {
 	return backRepoAnotherDummyData.db
 }
 
 // GetAnotherDummyDataDBFromAnotherDummyDataPtr is a handy function to access the back repo instance from the stage instance
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) GetAnotherDummyDataDBFromAnotherDummyDataPtr(anotherdummydata *models.AnotherDummyData) (anotherdummydataDB *AnotherDummyDataDB) {
-	id := (*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata]
-	anotherdummydataDB = (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[id]
-	return
-}
-
-// BackRepoAnotherDummyData.Init set up the BackRepo of the AnotherDummyData
-func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) Init(db *gorm.DB) (Error error) {
-
-	if backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr != nil {
-		err := errors.New("In Init, backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr should be nil")
-		return err
-	}
-
-	if backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB != nil {
-		err := errors.New("In Init, backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB should be nil")
-		return err
-	}
-
-	if backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID != nil {
-		err := errors.New("In Init, backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID should be nil")
-		return err
-	}
-
-	tmp := make(map[uint]*models.AnotherDummyData, 0)
-	backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr = &tmp
-
-	tmpDB := make(map[uint]*AnotherDummyDataDB, 0)
-	backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB = &tmpDB
-
-	tmpID := make(map[*models.AnotherDummyData]uint, 0)
-	backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID = &tmpID
-
-	backRepoAnotherDummyData.db = db
+	id := backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata]
+	anotherdummydataDB = backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[id]
 	return
 }
 
@@ -156,7 +136,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseOne(s
 
 	// parse all backRepo instance and checks wether some instance have been unstaged
 	// in this case, remove them from the back repo
-	for id, anotherdummydata := range *backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr {
+	for id, anotherdummydata := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr {
 		if _, ok := stage.AnotherDummyDatas[anotherdummydata]; !ok {
 			backRepoAnotherDummyData.CommitDeleteInstance(id)
 		}
@@ -168,19 +148,20 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseOne(s
 // BackRepoAnotherDummyData.CommitDeleteInstance commits deletion of AnotherDummyData to the BackRepo
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitDeleteInstance(id uint) (Error error) {
 
-	anotherdummydata := (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr)[id]
+	anotherdummydata := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr[id]
 
 	// anotherdummydata is not staged anymore, remove anotherdummydataDB
-	anotherdummydataDB := (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[id]
-	query := backRepoAnotherDummyData.db.Unscoped().Delete(&anotherdummydataDB)
-	if query.Error != nil {
-		return query.Error
+	anotherdummydataDB := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[id]
+	db, _ := backRepoAnotherDummyData.db.Unscoped()
+	_, err := db.Delete(anotherdummydataDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	delete((*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID), anotherdummydata)
-	delete((*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr), id)
-	delete((*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB), id)
+	delete(backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID, anotherdummydata)
+	delete(backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr, id)
+	delete(backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB, id)
 
 	return
 }
@@ -190,7 +171,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitDeleteInst
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseOneInstance(anotherdummydata *models.AnotherDummyData) (Error error) {
 
 	// check if the anotherdummydata is not commited yet
-	if _, ok := (*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata]; ok {
+	if _, ok := backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata]; ok {
 		return
 	}
 
@@ -198,15 +179,15 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseOneIn
 	var anotherdummydataDB AnotherDummyDataDB
 	anotherdummydataDB.CopyBasicFieldsFromAnotherDummyData(anotherdummydata)
 
-	query := backRepoAnotherDummyData.db.Create(&anotherdummydataDB)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoAnotherDummyData.db.Create(&anotherdummydataDB)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// update stores
-	(*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata] = anotherdummydataDB.ID
-	(*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr)[anotherdummydataDB.ID] = anotherdummydata
-	(*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[anotherdummydataDB.ID] = &anotherdummydataDB
+	backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata] = anotherdummydataDB.ID
+	backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr[anotherdummydataDB.ID] = anotherdummydata
+	backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[anotherdummydataDB.ID] = &anotherdummydataDB
 
 	return
 }
@@ -215,7 +196,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseOneIn
 // Phase Two is the update of instance with the field in the database
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
-	for idx, anotherdummydata := range *backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr {
+	for idx, anotherdummydata := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr {
 		backRepoAnotherDummyData.CommitPhaseTwoInstance(backRepo, idx, anotherdummydata)
 	}
 
@@ -227,14 +208,14 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseTwo(b
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseTwoInstance(backRepo *BackRepoStruct, idx uint, anotherdummydata *models.AnotherDummyData) (Error error) {
 
 	// fetch matching anotherdummydataDB
-	if anotherdummydataDB, ok := (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[idx]; ok {
+	if anotherdummydataDB, ok := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[idx]; ok {
 
 		anotherdummydataDB.CopyBasicFieldsFromAnotherDummyData(anotherdummydata)
 
 		// insertion point for translating pointers encodings into actual pointers
-		query := backRepoAnotherDummyData.db.Save(&anotherdummydataDB)
-		if query.Error != nil {
-			return query.Error
+		_, err := backRepoAnotherDummyData.db.Save(anotherdummydataDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else {
@@ -249,20 +230,19 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CommitPhaseTwoIn
 // BackRepoAnotherDummyData.CheckoutPhaseOne Checkouts all BackRepo instances to the Stage
 //
 // Phase One will result in having instances on the stage aligned with the back repo
-// pointers are not initialized yet (this is for pahse two)
-//
+// pointers are not initialized yet (this is for phase two)
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseOne() (Error error) {
 
 	anotherdummydataDBArray := make([]AnotherDummyDataDB, 0)
-	query := backRepoAnotherDummyData.db.Find(&anotherdummydataDBArray)
-	if query.Error != nil {
-		return query.Error
+	_, err := backRepoAnotherDummyData.db.Find(&anotherdummydataDBArray)
+	if err != nil {
+		return err
 	}
 
 	// list of instances to be removed
 	// start from the initial map on the stage and remove instances that have been checked out
 	anotherdummydataInstancesToBeRemovedFromTheStage := make(map[*models.AnotherDummyData]any)
-	for key, value := range models.Stage.AnotherDummyDatas {
+	for key, value := range backRepoAnotherDummyData.stage.AnotherDummyDatas {
 		anotherdummydataInstancesToBeRemovedFromTheStage[key] = value
 	}
 
@@ -272,7 +252,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseOne
 
 		// do not remove this instance from the stage, therefore
 		// remove instance from the list of instances to be be removed from the stage
-		anotherdummydata, ok := (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr)[anotherdummydataDB.ID]
+		anotherdummydata, ok := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr[anotherdummydataDB.ID]
 		if ok {
 			delete(anotherdummydataInstancesToBeRemovedFromTheStage, anotherdummydata)
 		}
@@ -280,13 +260,13 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseOne
 
 	// remove from stage and back repo's 3 maps all anotherdummydatas that are not in the checkout
 	for anotherdummydata := range anotherdummydataInstancesToBeRemovedFromTheStage {
-		anotherdummydata.Unstage()
+		anotherdummydata.Unstage(backRepoAnotherDummyData.GetStage())
 
 		// remove instance from the back repo 3 maps
-		anotherdummydataID := (*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata]
-		delete((*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID), anotherdummydata)
-		delete((*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB), anotherdummydataID)
-		delete((*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr), anotherdummydataID)
+		anotherdummydataID := backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata]
+		delete(backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID, anotherdummydata)
+		delete(backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB, anotherdummydataID)
+		delete(backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr, anotherdummydataID)
 	}
 
 	return
@@ -296,24 +276,27 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseOne
 // models version of the anotherdummydataDB
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseOneInstance(anotherdummydataDB *AnotherDummyDataDB) (Error error) {
 
-	anotherdummydata, ok := (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr)[anotherdummydataDB.ID]
+	anotherdummydata, ok := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr[anotherdummydataDB.ID]
 	if !ok {
 		anotherdummydata = new(models.AnotherDummyData)
 
-		(*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr)[anotherdummydataDB.ID] = anotherdummydata
-		(*backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata] = anotherdummydataDB.ID
+		backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr[anotherdummydataDB.ID] = anotherdummydata
+		backRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata] = anotherdummydataDB.ID
 
 		// append model store with the new element
 		anotherdummydata.Name = anotherdummydataDB.Name_Data.String
-		anotherdummydata.Stage()
+		anotherdummydata.Stage(backRepoAnotherDummyData.GetStage())
 	}
 	anotherdummydataDB.CopyBasicFieldsToAnotherDummyData(anotherdummydata)
+
+	// in some cases, the instance might have been unstaged. It is necessary to stage it again
+	anotherdummydata.Stage(backRepoAnotherDummyData.GetStage())
 
 	// preserve pointer to anotherdummydataDB. Otherwise, pointer will is recycled and the map of pointers
 	// Map_AnotherDummyDataDBID_AnotherDummyDataDB)[anotherdummydataDB hold variable pointers
 	anotherdummydataDB_Data := *anotherdummydataDB
 	preservedPtrToAnotherDummyData := &anotherdummydataDB_Data
-	(*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[anotherdummydataDB.ID] = preservedPtrToAnotherDummyData
+	backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[anotherdummydataDB.ID] = preservedPtrToAnotherDummyData
 
 	return
 }
@@ -323,7 +306,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseOne
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseTwo(backRepo *BackRepoStruct) (Error error) {
 
 	// parse all DB instance and update all pointer fields of the translated models instance
-	for _, anotherdummydataDB := range *backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
+	for _, anotherdummydataDB := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
 		backRepoAnotherDummyData.CheckoutPhaseTwoInstance(backRepo, anotherdummydataDB)
 	}
 	return
@@ -333,8 +316,14 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseTwo
 // Phase Two is the update of instance with the field in the database
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseTwoInstance(backRepo *BackRepoStruct, anotherdummydataDB *AnotherDummyDataDB) (Error error) {
 
-	anotherdummydata := (*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr)[anotherdummydataDB.ID]
-	_ = anotherdummydata // sometimes, there is no code generated. This lines voids the "unused variable" compilation error
+	anotherdummydata := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr[anotherdummydataDB.ID]
+
+	anotherdummydataDB.DecodePointers(backRepo, anotherdummydata)
+
+	return
+}
+
+func (anotherdummydataDB *AnotherDummyDataDB) DecodePointers(backRepo *BackRepoStruct, anotherdummydata *models.AnotherDummyData) {
 
 	// insertion point for checkout of pointer encoding
 	return
@@ -343,7 +332,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) CheckoutPhaseTwo
 // CommitAnotherDummyData allows commit of a single anotherdummydata (if already staged)
 func (backRepo *BackRepoStruct) CommitAnotherDummyData(anotherdummydata *models.AnotherDummyData) {
 	backRepo.BackRepoAnotherDummyData.CommitPhaseOneInstance(anotherdummydata)
-	if id, ok := (*backRepo.BackRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata]; ok {
+	if id, ok := backRepo.BackRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata]; ok {
 		backRepo.BackRepoAnotherDummyData.CommitPhaseTwoInstance(backRepo, id, anotherdummydata)
 	}
 	backRepo.CommitFromBackNb = backRepo.CommitFromBackNb + 1
@@ -352,14 +341,14 @@ func (backRepo *BackRepoStruct) CommitAnotherDummyData(anotherdummydata *models.
 // CommitAnotherDummyData allows checkout of a single anotherdummydata (if already staged and with a BackRepo id)
 func (backRepo *BackRepoStruct) CheckoutAnotherDummyData(anotherdummydata *models.AnotherDummyData) {
 	// check if the anotherdummydata is staged
-	if _, ok := (*backRepo.BackRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata]; ok {
+	if _, ok := backRepo.BackRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata]; ok {
 
-		if id, ok := (*backRepo.BackRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID)[anotherdummydata]; ok {
+		if id, ok := backRepo.BackRepoAnotherDummyData.Map_AnotherDummyDataPtr_AnotherDummyDataDBID[anotherdummydata]; ok {
 			var anotherdummydataDB AnotherDummyDataDB
 			anotherdummydataDB.ID = id
 
-			if err := backRepo.BackRepoAnotherDummyData.db.First(&anotherdummydataDB, id).Error; err != nil {
-				log.Panicln("CheckoutAnotherDummyData : Problem with getting object with id:", id)
+			if _, err := backRepo.BackRepoAnotherDummyData.db.First(&anotherdummydataDB, id); err != nil {
+				log.Fatalln("CheckoutAnotherDummyData : Problem with getting object with id:", id)
 			}
 			backRepo.BackRepoAnotherDummyData.CheckoutPhaseOneInstance(&anotherdummydataDB)
 			backRepo.BackRepoAnotherDummyData.CheckoutPhaseTwoInstance(backRepo, &anotherdummydataDB)
@@ -369,6 +358,14 @@ func (backRepo *BackRepoStruct) CheckoutAnotherDummyData(anotherdummydata *model
 
 // CopyBasicFieldsFromAnotherDummyData
 func (anotherdummydataDB *AnotherDummyDataDB) CopyBasicFieldsFromAnotherDummyData(anotherdummydata *models.AnotherDummyData) {
+	// insertion point for fields commit
+
+	anotherdummydataDB.Name_Data.String = anotherdummydata.Name
+	anotherdummydataDB.Name_Data.Valid = true
+}
+
+// CopyBasicFieldsFromAnotherDummyData_WOP
+func (anotherdummydataDB *AnotherDummyDataDB) CopyBasicFieldsFromAnotherDummyData_WOP(anotherdummydata *models.AnotherDummyData_WOP) {
 	// insertion point for fields commit
 
 	anotherdummydataDB.Name_Data.String = anotherdummydata.Name
@@ -389,6 +386,12 @@ func (anotherdummydataDB *AnotherDummyDataDB) CopyBasicFieldsToAnotherDummyData(
 	anotherdummydata.Name = anotherdummydataDB.Name_Data.String
 }
 
+// CopyBasicFieldsToAnotherDummyData_WOP
+func (anotherdummydataDB *AnotherDummyDataDB) CopyBasicFieldsToAnotherDummyData_WOP(anotherdummydata *models.AnotherDummyData_WOP) {
+	// insertion point for checkout of basic fields (back repo to stage)
+	anotherdummydata.Name = anotherdummydataDB.Name_Data.String
+}
+
 // CopyBasicFieldsToAnotherDummyDataWOP
 func (anotherdummydataDB *AnotherDummyDataDB) CopyBasicFieldsToAnotherDummyDataWOP(anotherdummydata *AnotherDummyDataWOP) {
 	anotherdummydata.ID = int(anotherdummydataDB.ID)
@@ -404,7 +407,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) Backup(dirPath s
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*AnotherDummyDataDB, 0)
-	for _, anotherdummydataDB := range *backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
+	for _, anotherdummydataDB := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
 		forBackup = append(forBackup, anotherdummydataDB)
 	}
 
@@ -415,12 +418,12 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) Backup(dirPath s
 	file, err := json.MarshalIndent(forBackup, "", " ")
 
 	if err != nil {
-		log.Panic("Cannot json AnotherDummyData ", filename, " ", err.Error())
+		log.Fatal("Cannot json AnotherDummyData ", filename, " ", err.Error())
 	}
 
 	err = ioutil.WriteFile(filename, file, 0644)
 	if err != nil {
-		log.Panic("Cannot write the json AnotherDummyData file", err.Error())
+		log.Fatal("Cannot write the json AnotherDummyData file", err.Error())
 	}
 }
 
@@ -430,7 +433,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) BackupXL(file *x
 	// organize the map into an array with increasing IDs, in order to have repoductible
 	// backup file
 	forBackup := make([]*AnotherDummyDataDB, 0)
-	for _, anotherdummydataDB := range *backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
+	for _, anotherdummydataDB := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
 		forBackup = append(forBackup, anotherdummydataDB)
 	}
 
@@ -440,7 +443,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) BackupXL(file *x
 
 	sh, err := file.AddSheet("AnotherDummyData")
 	if err != nil {
-		log.Panic("Cannot add XL file", err.Error())
+		log.Fatal("Cannot add XL file", err.Error())
 	}
 	_ = sh
 
@@ -465,13 +468,13 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) RestoreXLPhaseOn
 	sh, ok := file.Sheet["AnotherDummyData"]
 	_ = sh
 	if !ok {
-		log.Panic(errors.New("sheet not found"))
+		log.Fatal(errors.New("sheet not found"))
 	}
 
 	// log.Println("Max row is", sh.MaxRow)
 	err := sh.ForEachRow(backRepoAnotherDummyData.rowVisitorAnotherDummyData)
 	if err != nil {
-		log.Panic("Err=", err)
+		log.Fatal("Err=", err)
 	}
 }
 
@@ -491,11 +494,11 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) rowVisitorAnothe
 
 		anotherdummydataDB_ID_atBackupTime := anotherdummydataDB.ID
 		anotherdummydataDB.ID = 0
-		query := backRepoAnotherDummyData.db.Create(anotherdummydataDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoAnotherDummyData.db.Create(anotherdummydataDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[anotherdummydataDB.ID] = anotherdummydataDB
+		backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[anotherdummydataDB.ID] = anotherdummydataDB
 		BackRepoAnotherDummyDataid_atBckpTime_newID[anotherdummydataDB_ID_atBackupTime] = anotherdummydataDB.ID
 	}
 	return nil
@@ -513,7 +516,7 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) RestorePhaseOne(
 	jsonFile, err := os.Open(filename)
 	// if we os.Open returns an error then handle it
 	if err != nil {
-		log.Panic("Cannot restore/open the json AnotherDummyData file", filename, " ", err.Error())
+		log.Fatal("Cannot restore/open the json AnotherDummyData file", filename, " ", err.Error())
 	}
 
 	// read our opened jsonFile as a byte array.
@@ -528,16 +531,16 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) RestorePhaseOne(
 
 		anotherdummydataDB_ID_atBackupTime := anotherdummydataDB.ID
 		anotherdummydataDB.ID = 0
-		query := backRepoAnotherDummyData.db.Create(anotherdummydataDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		_, err := backRepoAnotherDummyData.db.Create(anotherdummydataDB)
+		if err != nil {
+			log.Fatal(err)
 		}
-		(*backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB)[anotherdummydataDB.ID] = anotherdummydataDB
+		backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[anotherdummydataDB.ID] = anotherdummydataDB
 		BackRepoAnotherDummyDataid_atBckpTime_newID[anotherdummydataDB_ID_atBackupTime] = anotherdummydataDB.ID
 	}
 
 	if err != nil {
-		log.Panic("Cannot restore/unmarshall json AnotherDummyData file", err.Error())
+		log.Fatal("Cannot restore/unmarshall json AnotherDummyData file", err.Error())
 	}
 }
 
@@ -545,19 +548,44 @@ func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) RestorePhaseOne(
 // to compute new index
 func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) RestorePhaseTwo() {
 
-	for _, anotherdummydataDB := range *backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
+	for _, anotherdummydataDB := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB {
 
 		// next line of code is to avert unused variable compilation error
 		_ = anotherdummydataDB
 
 		// insertion point for reindexing pointers encoding
 		// update databse with new index encoding
-		query := backRepoAnotherDummyData.db.Model(anotherdummydataDB).Updates(*anotherdummydataDB)
-		if query.Error != nil {
-			log.Panic(query.Error)
+		db, _ := backRepoAnotherDummyData.db.Model(anotherdummydataDB)
+		_, err := db.Updates(*anotherdummydataDB)
+		if err != nil {
+			log.Fatal(err)
 		}
 	}
 
+}
+
+// BackRepoAnotherDummyData.ResetReversePointers commits all staged instances of AnotherDummyData to the BackRepo
+// Phase Two is the update of instance with the field in the database
+func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) ResetReversePointers(backRepo *BackRepoStruct) (Error error) {
+
+	for idx, anotherdummydata := range backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataPtr {
+		backRepoAnotherDummyData.ResetReversePointersInstance(backRepo, idx, anotherdummydata)
+	}
+
+	return
+}
+
+func (backRepoAnotherDummyData *BackRepoAnotherDummyDataStruct) ResetReversePointersInstance(backRepo *BackRepoStruct, idx uint, anotherdummydata *models.AnotherDummyData) (Error error) {
+
+	// fetch matching anotherdummydataDB
+	if anotherdummydataDB, ok := backRepoAnotherDummyData.Map_AnotherDummyDataDBID_AnotherDummyDataDB[idx]; ok {
+		_ = anotherdummydataDB // to avoid unused variable error if there are no reverse to reset
+
+		// insertion point for reverse pointers reset
+		// end of insertion point for reverse pointers reset
+	}
+
+	return
 }
 
 // this field is used during the restauration process.
