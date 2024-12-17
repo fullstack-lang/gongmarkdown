@@ -49,17 +49,12 @@ func main() {
 		root.Content = `
 # Standalone Markdown Component
 
-This is a **standalone** Angular component using ` + "`" + "ngx-markdown" + "`." + `
+This is a **standalone** Angular component using "ngx-markdown"
 
 ## Features
 - Renders markdown from string
 - Supports remote markdown loading
 - Fully configurable
-
-### Code Example
-` + "```" + `typescript
-const markdown = 'Hello **World**!';
-` + "```" + `
 
 - List item 1
 - List item 2
@@ -94,10 +89,23 @@ const markdown = 'Hello **World**!';
 		another := (&gongmarkdown_models.AnotherDummyData{Name: "another"}).Stage(stack.Stage)
 		dummyData1.DummyPointerToGongStruct = another
 
-		// table := gongmarkdown_models.GenerateTableOfDummnies()
-		// root.SubElements = append(root.SubElements, table)
+		table := gongmarkdown_models.GenerateTableOfDummnies(stack.Stage)
+		root.SubElements = append(root.SubElements, table)
 
-		// generic call
+		// // add a chapter1
+		// chapter1 := new(gongmarkdown_models.Element).Stage(stack.Stage)
+		// chapter1.Name = "Chapter 1"
+		// chapter1.Type = gongmarkdown_models.TITLE
+		// chapter1.Content = "This is the title of chapter 1"
+		// root.SubElements = append(root.SubElements, chapter1)
+
+		// paragraph := new(gongmarkdown_models.Element).Stage(stack.Stage)
+		// paragraph.Name = "paragraph 1"
+		// paragraph.Type = gongmarkdown_models.PARAGRAPH
+		// paragraph.Content = "This is the content of paragraph 1"
+		// chapter1.SubElements = append(chapter1.SubElements, paragraph)
+
+		createNestedMarkdownStructure(root, stack.Stage)
 	}
 
 	// fetch the document singloton
