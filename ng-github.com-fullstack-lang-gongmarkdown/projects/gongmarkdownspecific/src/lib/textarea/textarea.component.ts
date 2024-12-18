@@ -16,7 +16,7 @@ export class TextareaComponent {
   @Input() GONG__StackPath: string = ""
   frontRepo: gongmarkdown.FrontRepo | undefined
 
-  markdownContent = ``
+  content = ``
 
   constructor(
     private frontRepoService: gongmarkdown.FrontRepoService,
@@ -36,9 +36,9 @@ export class TextareaComponent {
     if (this.frontRepo === undefined) {
       return
     }
-    if (this.frontRepo.getFrontArray(gongmarkdown.MarkdownContent.GONGSTRUCT_NAME).length == 1) {
-      let markdownContentObj = this.frontRepo.getFrontArray<gongmarkdown.MarkdownContent>(gongmarkdown.MarkdownContent.GONGSTRUCT_NAME)[0]
-      this.markdownContent = markdownContentObj.Content
+    if (this.frontRepo.getFrontArray(gongmarkdown.Content.GONGSTRUCT_NAME).length == 1) {
+      let content = this.frontRepo.getFrontArray<gongmarkdown.Content>(gongmarkdown.Content.GONGSTRUCT_NAME)[0]
+      this.content = content.Content
     }
   }
 }

@@ -15,29 +15,9 @@ func GetInstanceDBFromInstance[T models.Gongstruct, T2 GongstructDB](
 
 	switch concreteInstance := any(instance).(type) {
 	// insertion point for per struct backup
-	case *models.AnotherDummyData:
-		anotherdummydataInstance := any(concreteInstance).(*models.AnotherDummyData)
-		ret2 := backRepo.BackRepoAnotherDummyData.GetAnotherDummyDataDBFromAnotherDummyDataPtr(anotherdummydataInstance)
-		ret = any(ret2).(*T2)
-	case *models.Cell:
-		cellInstance := any(concreteInstance).(*models.Cell)
-		ret2 := backRepo.BackRepoCell.GetCellDBFromCellPtr(cellInstance)
-		ret = any(ret2).(*T2)
-	case *models.DummyData:
-		dummydataInstance := any(concreteInstance).(*models.DummyData)
-		ret2 := backRepo.BackRepoDummyData.GetDummyDataDBFromDummyDataPtr(dummydataInstance)
-		ret = any(ret2).(*T2)
-	case *models.Element:
-		elementInstance := any(concreteInstance).(*models.Element)
-		ret2 := backRepo.BackRepoElement.GetElementDBFromElementPtr(elementInstance)
-		ret = any(ret2).(*T2)
-	case *models.MarkdownContent:
-		markdowncontentInstance := any(concreteInstance).(*models.MarkdownContent)
-		ret2 := backRepo.BackRepoMarkdownContent.GetMarkdownContentDBFromMarkdownContentPtr(markdowncontentInstance)
-		ret = any(ret2).(*T2)
-	case *models.Row:
-		rowInstance := any(concreteInstance).(*models.Row)
-		ret2 := backRepo.BackRepoRow.GetRowDBFromRowPtr(rowInstance)
+	case *models.Content:
+		contentInstance := any(concreteInstance).(*models.Content)
+		ret2 := backRepo.BackRepoContent.GetContentDBFromContentPtr(contentInstance)
 		ret = any(ret2).(*T2)
 	default:
 		_ = concreteInstance
@@ -52,33 +32,8 @@ func GetID[T models.Gongstruct](
 
 	switch inst := any(instance).(type) {
 	// insertion point for per struct backup
-	case *models.AnotherDummyData:
-		tmp := GetInstanceDBFromInstance[models.AnotherDummyData, AnotherDummyDataDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.Cell:
-		tmp := GetInstanceDBFromInstance[models.Cell, CellDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.DummyData:
-		tmp := GetInstanceDBFromInstance[models.DummyData, DummyDataDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.Element:
-		tmp := GetInstanceDBFromInstance[models.Element, ElementDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.MarkdownContent:
-		tmp := GetInstanceDBFromInstance[models.MarkdownContent, MarkdownContentDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.Row:
-		tmp := GetInstanceDBFromInstance[models.Row, RowDB](
+	case *models.Content:
+		tmp := GetInstanceDBFromInstance[models.Content, ContentDB](
 			stage, backRepo, inst,
 		)
 		id = int(tmp.ID)
@@ -95,33 +50,8 @@ func GetIDPointer[T models.PointerToGongstruct](
 
 	switch inst := any(instance).(type) {
 	// insertion point for per struct backup
-	case *models.AnotherDummyData:
-		tmp := GetInstanceDBFromInstance[models.AnotherDummyData, AnotherDummyDataDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.Cell:
-		tmp := GetInstanceDBFromInstance[models.Cell, CellDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.DummyData:
-		tmp := GetInstanceDBFromInstance[models.DummyData, DummyDataDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.Element:
-		tmp := GetInstanceDBFromInstance[models.Element, ElementDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.MarkdownContent:
-		tmp := GetInstanceDBFromInstance[models.MarkdownContent, MarkdownContentDB](
-			stage, backRepo, inst,
-		)
-		id = int(tmp.ID)
-	case *models.Row:
-		tmp := GetInstanceDBFromInstance[models.Row, RowDB](
+	case *models.Content:
+		tmp := GetInstanceDBFromInstance[models.Content, ContentDB](
 			stage, backRepo, inst,
 		)
 		id = int(tmp.ID)

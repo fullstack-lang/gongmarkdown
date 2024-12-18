@@ -20,72 +20,12 @@ func FillUpNamedFormFromGongstruct[T models.Gongstruct](instance *T, probe *Prob
 
 	switch instancesTyped := any(instance).(type) {
 	// insertion point
-	case *models.AnotherDummyData:
+	case *models.Content:
 		formGroup := (&gongtable.FormGroup{
 			Name:  formName,
-			Label: "AnotherDummyData Form",
+			Label: "Content Form",
 		}).Stage(formStage)
-		formGroup.OnSave = __gong__New__AnotherDummyDataFormCallback(
-			instancesTyped,
-			probe,
-			formGroup,
-		)
-		formGroup.HasSuppressButton = true
-		FillUpForm(instancesTyped, formGroup, probe)
-	case *models.Cell:
-		formGroup := (&gongtable.FormGroup{
-			Name:  formName,
-			Label: "Cell Form",
-		}).Stage(formStage)
-		formGroup.OnSave = __gong__New__CellFormCallback(
-			instancesTyped,
-			probe,
-			formGroup,
-		)
-		formGroup.HasSuppressButton = true
-		FillUpForm(instancesTyped, formGroup, probe)
-	case *models.DummyData:
-		formGroup := (&gongtable.FormGroup{
-			Name:  formName,
-			Label: "DummyData Form",
-		}).Stage(formStage)
-		formGroup.OnSave = __gong__New__DummyDataFormCallback(
-			instancesTyped,
-			probe,
-			formGroup,
-		)
-		formGroup.HasSuppressButton = true
-		FillUpForm(instancesTyped, formGroup, probe)
-	case *models.Element:
-		formGroup := (&gongtable.FormGroup{
-			Name:  formName,
-			Label: "Element Form",
-		}).Stage(formStage)
-		formGroup.OnSave = __gong__New__ElementFormCallback(
-			instancesTyped,
-			probe,
-			formGroup,
-		)
-		formGroup.HasSuppressButton = true
-		FillUpForm(instancesTyped, formGroup, probe)
-	case *models.MarkdownContent:
-		formGroup := (&gongtable.FormGroup{
-			Name:  formName,
-			Label: "MarkdownContent Form",
-		}).Stage(formStage)
-		formGroup.OnSave = __gong__New__MarkdownContentFormCallback(
-			instancesTyped,
-			probe,
-			formGroup,
-		)
-		formGroup.HasSuppressButton = true
-		FillUpForm(instancesTyped, formGroup, probe)
-	case *models.Row:
-		formGroup := (&gongtable.FormGroup{
-			Name:  formName,
-			Label: "Row Form",
-		}).Stage(formStage)
-		formGroup.OnSave = __gong__New__RowFormCallback(
+		formGroup.OnSave = __gong__New__ContentFormCallback(
 			instancesTyped,
 			probe,
 			formGroup,
