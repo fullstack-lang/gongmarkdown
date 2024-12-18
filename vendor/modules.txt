@@ -174,6 +174,9 @@ github.com/jinzhu/now
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
+# github.com/karrick/godirwalk v1.17.0
+## explicit; go 1.13
+github.com/karrick/godirwalk
 # github.com/klauspost/cpuid/v2 v2.2.9
 ## explicit; go 1.20
 github.com/klauspost/cpuid/v2
@@ -190,6 +193,9 @@ github.com/leodido/go-urn/scim/schema
 # github.com/mattn/go-isatty v0.0.20
 ## explicit; go 1.15
 github.com/mattn/go-isatty
+# github.com/mattn/go-runewidth v0.0.9
+## explicit; go 1.9
+github.com/mattn/go-runewidth
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
@@ -199,9 +205,16 @@ github.com/modern-go/reflect2
 # github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 ## explicit
 github.com/mohae/deepcopy
+# github.com/nao1215/markdown v0.7.0
+## explicit; go 1.20
+github.com/nao1215/markdown
+github.com/nao1215/markdown/internal
 # github.com/ncruces/go-strftime v0.1.9
 ## explicit; go 1.17
 github.com/ncruces/go-strftime
+# github.com/olekukonko/tablewriter v0.0.5
+## explicit; go 1.12
+github.com/olekukonko/tablewriter
 # github.com/pelletier/go-toml/v2 v2.2.3
 ## explicit; go 1.21.0
 github.com/pelletier/go-toml/v2
@@ -264,17 +277,6 @@ github.com/xuri/excelize/v2
 # github.com/xuri/nfp v0.0.0-20240318013403-ab9948c2c4a7
 ## explicit; go 1.15
 github.com/xuri/nfp
-# github.com/yuin/goldmark v1.7.8
-## explicit; go 1.19
-github.com/yuin/goldmark
-github.com/yuin/goldmark/ast
-github.com/yuin/goldmark/extension
-github.com/yuin/goldmark/extension/ast
-github.com/yuin/goldmark/parser
-github.com/yuin/goldmark/renderer
-github.com/yuin/goldmark/renderer/html
-github.com/yuin/goldmark/text
-github.com/yuin/goldmark/util
 # golang.org/x/arch v0.12.0
 ## explicit; go 1.18
 golang.org/x/arch/x86/x86asm

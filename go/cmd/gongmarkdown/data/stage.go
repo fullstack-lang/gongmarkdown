@@ -44,13 +44,45 @@ This is a **standalone** Angular component using "ngx-markdown"
 
 ![Local Angular Logo](assets/images/image.png)
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="100" height="100" fill="gold">
-  <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
-</svg>
-
 <img src=/assets/images/star.svg width=50 />
 
-`
+# This is H1
+This is plain text
+## This is H2 with text format
+Text formatting, such as **bold** and *italic*, `code` styles.
+## Code Block
+```go
+package main
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, World!")
+}
+```
+## List
+- Bullet Item 1
+- Bullet Item 2
+- Bullet Item 3
+1. Ordered Item 1
+2. Ordered Item 2
+3. Ordered Item 3
+## CheckBox
+- [ ] `sample code`
+- [x] [Go](https://golang.org)
+- [ ] ~~strikethrough~~
+## Blockquote
+> If you can dream it, you can do it.
+### Horizontal Rule
+---
+## Table
+| NAME  | AGE | COUNTRY |
+|-------|-----|---------|
+| David |  23 | USA     |
+| John  |  30 | UK      |
+| Bob   |  25 | Canada  |
+
+## Image
+![sample_image](/assets/images/star.svg)`
 
 	// Setup of pointers
 }
