@@ -13,7 +13,7 @@ import { AngularSplitModule } from 'angular-split';
 
 import * as gongmarkdown from '../../projects/gongmarkdown/src/public-api'
 
-import { GongmarkdownspecificMarkdownComponent, GongmarkdownspecificTextareaComponent } from '../../projects/gongmarkdownspecific/src/public-api'
+import { MarkdownComponent, TextareaComponent } from '../../projects/gongmarkdownspecific/src/public-api'
 
 import { TreeComponent } from '@vendored_components/github.com/fullstack-lang/gongtree/ng-github.com-fullstack-lang-gongtree/projects/gongtreespecific/src/public-api'
 import { MaterialTableComponent } from '@vendored_components/github.com/fullstack-lang/gongtable/ng-github.com-fullstack-lang-gongtable/projects/gongtablespecific/src/lib/material-table/material-table.component';
@@ -43,9 +43,9 @@ import { MarkdownModule } from 'ngx-markdown';
     MaterialFormComponent,
     PanelComponent,
 
-    GongmarkdownspecificMarkdownComponent,
-    GongmarkdownspecificTextareaComponent,
-    
+    MarkdownComponent,
+    TextareaComponent,
+
   ],
 
   templateUrl: './app.component.html',

@@ -6,20 +6,18 @@ import { MarkdownModule } from 'ngx-markdown';
 import { HttpClientModule } from '@angular/common/http';
 
 @Component({
-  selector: 'lib-gongmarkdownspecific-textarea',
-  templateUrl: './gongmarkdownspecific-textarea.component.html',
-  styleUrls: ['./gongmarkdownspecific-textarea.component.css'],
+  selector: 'lib-textarea',
   standalone: true,
-  imports: [CommonModule,
-    MarkdownModule, HttpClientModule  ],
-    providers: [],
+  imports: [CommonModule, MarkdownModule, HttpClientModule],
+  templateUrl: './textarea.component.html',
+  styleUrl: './textarea.component.css'
 })
-export class GongmarkdownspecificTextareaComponent implements OnInit {
+export class TextareaComponent {
   @Input() GONG__StackPath: string = ""
   frontRepo: gongmarkdown.FrontRepo | undefined
 
   markdownContent = ``
-  
+
   constructor(
     private frontRepoService: gongmarkdown.FrontRepoService,
   ) { }
@@ -43,5 +41,4 @@ export class GongmarkdownspecificTextareaComponent implements OnInit {
       this.markdownContent = markdownContentObj.Content
     }
   }
-
 }

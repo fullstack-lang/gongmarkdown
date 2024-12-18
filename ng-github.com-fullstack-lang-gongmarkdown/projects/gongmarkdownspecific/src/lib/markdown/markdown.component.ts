@@ -6,15 +6,14 @@ import { MarkdownModule, provideMarkdown } from 'ngx-markdown';
 
 
 @Component({
-  selector: 'lib-gongmarkdownspecific-markdown',
-  templateUrl: './gongmarkdownspecific-markdown.component.html',
-  styleUrls: ['./gongmarkdownspecific-markdown.component.css'],
+  selector: 'lib-markdown',
   standalone: true,
-  imports: [CommonModule, MarkdownModule ],
-    providers: [provideMarkdown()],
-
+  imports: [CommonModule, MarkdownModule],
+  providers: [provideMarkdown()],
+  templateUrl: './markdown.component.html',
+  styleUrl: './markdown.component.css'
 })
-export class GongmarkdownspecificMarkdownComponent implements OnInit {
+export class MarkdownComponent {
 
   @Input() GONG__StackPath: string = ""
   frontRepo: gongmarkdown.FrontRepo | undefined
@@ -44,4 +43,5 @@ export class GongmarkdownspecificMarkdownComponent implements OnInit {
       this.markdownContent = markdownContentObj.Content
     }
   }
+
 }
