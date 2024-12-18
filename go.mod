@@ -17,6 +17,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/tealeg/xlsx/v3 v3.3.11
 	github.com/xuri/excelize/v2 v2.9.0
+	github.com/yuin/goldmark v1.7.8
 	gorm.io/gorm v1.25.12
 )
 

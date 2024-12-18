@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"strconv"
-	"time"
 
 	gongmarkdown_models "github.com/fullstack-lang/gongmarkdown/go/models"
 	gongmarkdown_stack "github.com/fullstack-lang/gongmarkdown/go/stack"
@@ -41,12 +40,9 @@ func main() {
 	stack.Probe.Refresh()
 
 	if *generateDocument {
-		markdownContent := (&gongmarkdown_models.MarkdownContent{Name: "Dummy"}).Stage(stack.Stage)
-		markdownContent.Name = "Dummy"
-
-		root := (&gongmarkdown_models.Element{Name: "Root"}).Stage(stack.Stage)
-		root.Type = gongmarkdown_models.PARAGRAPH
-		root.Content = `
+		content := (&gongmarkdown_models.Content{Name: "Dummy"}).Stage(stack.Stage)
+		content.Name = "Dummy"
+		content.Content = `
 # Standalone Markdown Component
 
 This is a **standalone** Angular component using "ngx-markdown"
@@ -68,64 +64,8 @@ This is a **standalone** Angular component using "ngx-markdown"
 <img src=/assets/images/star.svg width=50 />
 
 `
-		markdownContent.Root = root
 
-		// table := (&gongmarkdown_models.Element{Name: "Table"}).Stage(stack.Stage)
-		// table.Content = "Synthetic table"
-		// table.Type = gongmarkdown_models.TABLE
-
-		dummyData1 := (&gongmarkdown_models.DummyData{}).Stage(stack.Stage)
-		dummyData1.Name = "dummyData1"
-		dummyData1.DummyString = "dummyData1 string"
-		dummyData1.DummyBool = true
-		dummyData1.DummyEnumInt = gongmarkdown_models.ONE
-		dummyData1.DummyEnumString = gongmarkdown_models.PARAGRAPH
-		dummyData1.DummyDuration = time.Hour + time.Minute
-		dummyData1.DummyInt = 42
-		dummyData1.DummyFloat = 1.62
-
-		dummyData2 := (&gongmarkdown_models.DummyData{}).Stage(stack.Stage)
-		dummyData2.Name = "dummyData2"
-		dummyData2.DummyString = "dummyData2 string"
-		dummyData2.DummyBool = true
-		dummyData2.DummyDuration = 3*time.Hour + 34*time.Minute
-		dummyData1.DummyEnumInt = gongmarkdown_models.ONE
-
-		dummyData2.DummyInt = 43
-		dummyData2.DummyFloat = 5.77
-		dummyData2.DummyEnumInt = gongmarkdown_models.ONE
-
-		another := (&gongmarkdown_models.AnotherDummyData{Name: "another"}).Stage(stack.Stage)
-		dummyData1.DummyPointerToGongStruct = another
-
-		table := gongmarkdown_models.GenerateTableOfDummnies(stack.Stage)
-		root.SubElements = append(root.SubElements, table)
-
-		// // add a chapter1
-		// chapter1 := new(gongmarkdown_models.Element).Stage(stack.Stage)
-		// chapter1.Name = "Chapter 1"
-		// chapter1.Type = gongmarkdown_models.TITLE
-		// chapter1.Content = "This is the title of chapter 1"
-		// root.SubElements = append(root.SubElements, chapter1)
-
-		// paragraph := new(gongmarkdown_models.Element).Stage(stack.Stage)
-		// paragraph.Name = "paragraph 1"
-		// paragraph.Type = gongmarkdown_models.PARAGRAPH
-		// paragraph.Content = "This is the content of paragraph 1"
-		// chapter1.SubElements = append(chapter1.SubElements, paragraph)
-
-		createNestedMarkdownStructure(root, stack.Stage)
 	}
-
-	// fetch the document singloton
-	var singloton *gongmarkdown_models.MarkdownContent
-	for s := range stack.Stage.MarkdownContents {
-		singloton = s
-	}
-	if singloton == nil {
-		singloton = new(gongmarkdown_models.MarkdownContent).Stage(stack.Stage)
-	}
-	singloton.GenerateContent()
 
 	stack.Stage.Commit()
 

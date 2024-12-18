@@ -62,63 +62,13 @@ func fillUpTree(
 
 		switch gongStruct.Name {
 		// insertion point
-		case "AnotherDummyData":
+		case "Content":
 			nodeGongstruct.Name = name
-			set := *models.GetGongstructInstancesSet[models.AnotherDummyData](probe.stageOfInterest)
-			for _anotherdummydata := range set {
-				nodeInstance := (&tree.Node{Name: _anotherdummydata.GetName()}).Stage(probe.treeStage)
+			set := *models.GetGongstructInstancesSet[models.Content](probe.stageOfInterest)
+			for _content := range set {
+				nodeInstance := (&tree.Node{Name: _content.GetName()}).Stage(probe.treeStage)
 				nodeInstance.IsNodeClickable = true
-				nodeInstance.Impl = NewInstanceNodeCallback(_anotherdummydata, "AnotherDummyData", probe)
-
-				nodeGongstruct.Children = append(nodeGongstruct.Children, nodeInstance)
-			}
-		case "Cell":
-			nodeGongstruct.Name = name
-			set := *models.GetGongstructInstancesSet[models.Cell](probe.stageOfInterest)
-			for _cell := range set {
-				nodeInstance := (&tree.Node{Name: _cell.GetName()}).Stage(probe.treeStage)
-				nodeInstance.IsNodeClickable = true
-				nodeInstance.Impl = NewInstanceNodeCallback(_cell, "Cell", probe)
-
-				nodeGongstruct.Children = append(nodeGongstruct.Children, nodeInstance)
-			}
-		case "DummyData":
-			nodeGongstruct.Name = name
-			set := *models.GetGongstructInstancesSet[models.DummyData](probe.stageOfInterest)
-			for _dummydata := range set {
-				nodeInstance := (&tree.Node{Name: _dummydata.GetName()}).Stage(probe.treeStage)
-				nodeInstance.IsNodeClickable = true
-				nodeInstance.Impl = NewInstanceNodeCallback(_dummydata, "DummyData", probe)
-
-				nodeGongstruct.Children = append(nodeGongstruct.Children, nodeInstance)
-			}
-		case "Element":
-			nodeGongstruct.Name = name
-			set := *models.GetGongstructInstancesSet[models.Element](probe.stageOfInterest)
-			for _element := range set {
-				nodeInstance := (&tree.Node{Name: _element.GetName()}).Stage(probe.treeStage)
-				nodeInstance.IsNodeClickable = true
-				nodeInstance.Impl = NewInstanceNodeCallback(_element, "Element", probe)
-
-				nodeGongstruct.Children = append(nodeGongstruct.Children, nodeInstance)
-			}
-		case "MarkdownContent":
-			nodeGongstruct.Name = name
-			set := *models.GetGongstructInstancesSet[models.MarkdownContent](probe.stageOfInterest)
-			for _markdowncontent := range set {
-				nodeInstance := (&tree.Node{Name: _markdowncontent.GetName()}).Stage(probe.treeStage)
-				nodeInstance.IsNodeClickable = true
-				nodeInstance.Impl = NewInstanceNodeCallback(_markdowncontent, "MarkdownContent", probe)
-
-				nodeGongstruct.Children = append(nodeGongstruct.Children, nodeInstance)
-			}
-		case "Row":
-			nodeGongstruct.Name = name
-			set := *models.GetGongstructInstancesSet[models.Row](probe.stageOfInterest)
-			for _row := range set {
-				nodeInstance := (&tree.Node{Name: _row.GetName()}).Stage(probe.treeStage)
-				nodeInstance.IsNodeClickable = true
-				nodeInstance.Impl = NewInstanceNodeCallback(_row, "Row", probe)
+				nodeInstance.Impl = NewInstanceNodeCallback(_content, "Content", probe)
 
 				nodeGongstruct.Children = append(nodeGongstruct.Children, nodeInstance)
 			}

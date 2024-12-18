@@ -314,12 +314,7 @@ func ParseAstFileFromAst(stage *StageStruct, inFile *ast.File, fset *token.FileS
 var __gong__map_Indentifiers_gongstructName = make(map[string]string)
 
 // insertion point for identifiers maps
-var __gong__map_AnotherDummyData = make(map[string]*AnotherDummyData)
-var __gong__map_Cell = make(map[string]*Cell)
-var __gong__map_DummyData = make(map[string]*DummyData)
-var __gong__map_Element = make(map[string]*Element)
-var __gong__map_MarkdownContent = make(map[string]*MarkdownContent)
-var __gong__map_Row = make(map[string]*Row)
+var __gong__map_Content = make(map[string]*Content)
 
 // Parser needs to be configured for having the [Name1.Name2] or [pkg.Name1] ...
 // to be recognized as a proper identifier.
@@ -492,42 +487,12 @@ func UnmarshallGongstructStaging(stage *StageStruct, cmap *ast.CommentMap, assig
 									// this is the place where an instance is created
 									switch gongstructName {
 									// insertion point for identifiers
-									case "AnotherDummyData":
-										instanceAnotherDummyData := new(AnotherDummyData)
-										instanceAnotherDummyData.Name = instanceName
-										instanceAnotherDummyData.Stage(stage)
-										instance = any(instanceAnotherDummyData)
-										__gong__map_AnotherDummyData[identifier] = instanceAnotherDummyData
-									case "Cell":
-										instanceCell := new(Cell)
-										instanceCell.Name = instanceName
-										instanceCell.Stage(stage)
-										instance = any(instanceCell)
-										__gong__map_Cell[identifier] = instanceCell
-									case "DummyData":
-										instanceDummyData := new(DummyData)
-										instanceDummyData.Name = instanceName
-										instanceDummyData.Stage(stage)
-										instance = any(instanceDummyData)
-										__gong__map_DummyData[identifier] = instanceDummyData
-									case "Element":
-										instanceElement := new(Element)
-										instanceElement.Name = instanceName
-										instanceElement.Stage(stage)
-										instance = any(instanceElement)
-										__gong__map_Element[identifier] = instanceElement
-									case "MarkdownContent":
-										instanceMarkdownContent := new(MarkdownContent)
-										instanceMarkdownContent.Name = instanceName
-										instanceMarkdownContent.Stage(stage)
-										instance = any(instanceMarkdownContent)
-										__gong__map_MarkdownContent[identifier] = instanceMarkdownContent
-									case "Row":
-										instanceRow := new(Row)
-										instanceRow.Name = instanceName
-										instanceRow.Stage(stage)
-										instance = any(instanceRow)
-										__gong__map_Row[identifier] = instanceRow
+									case "Content":
+										instanceContent := new(Content)
+										instanceContent.Name = instanceName
+										instanceContent.Stage(stage)
+										instance = any(instanceContent)
+										__gong__map_Content[identifier] = instanceContent
 									}
 									__gong__map_Indentifiers_gongstructName[identifier] = gongstructName
 									return
@@ -564,31 +529,7 @@ func UnmarshallGongstructStaging(stage *StageStruct, cmap *ast.CommentMap, assig
 						}
 						switch gongstructName {
 						// insertion point for basic lit assignments
-						case "AnotherDummyData":
-							switch fieldName {
-							// insertion point for date assign code
-							}
-						case "Cell":
-							switch fieldName {
-							// insertion point for date assign code
-							}
-						case "DummyData":
-							switch fieldName {
-							// insertion point for date assign code
-							case "DummyTime":
-								__gong__map_DummyData[identifier].DummyTime, _ = time.Parse(
-									"2006-01-02 15:04:05.999999999 -0700 MST",
-									date)
-							}
-						case "Element":
-							switch fieldName {
-							// insertion point for date assign code
-							}
-						case "MarkdownContent":
-							switch fieldName {
-							// insertion point for date assign code
-							}
-						case "Row":
+						case "Content":
 							switch fieldName {
 							// insertion point for date assign code
 							}
@@ -617,47 +558,9 @@ func UnmarshallGongstructStaging(stage *StageStruct, cmap *ast.CommentMap, assig
 					}
 					switch gongstructName {
 					// insertion point for slice of pointers assignments
-					case "AnotherDummyData":
+					case "Content":
 						switch fieldName {
 						// insertion point for slice of pointers assign code
-						}
-					case "Cell":
-						switch fieldName {
-						// insertion point for slice of pointers assign code
-						}
-					case "DummyData":
-						switch fieldName {
-						// insertion point for slice of pointers assign code
-						}
-					case "Element":
-						switch fieldName {
-						// insertion point for slice of pointers assign code
-						case "SubElements":
-							// remove first and last char
-							targetIdentifier := ident.Name
-							target := __gong__map_Element[targetIdentifier]
-							__gong__map_Element[identifier].SubElements =
-								append(__gong__map_Element[identifier].SubElements, target)
-						case "Rows":
-							// remove first and last char
-							targetIdentifier := ident.Name
-							target := __gong__map_Row[targetIdentifier]
-							__gong__map_Element[identifier].Rows =
-								append(__gong__map_Element[identifier].Rows, target)
-						}
-					case "MarkdownContent":
-						switch fieldName {
-						// insertion point for slice of pointers assign code
-						}
-					case "Row":
-						switch fieldName {
-						// insertion point for slice of pointers assign code
-						case "Cells":
-							// remove first and last char
-							targetIdentifier := ident.Name
-							target := __gong__map_Cell[targetIdentifier]
-							__gong__map_Row[identifier].Cells =
-								append(__gong__map_Row[identifier].Cells, target)
 						}
 					}
 				case *ast.SelectorExpr:
@@ -708,86 +611,17 @@ func UnmarshallGongstructStaging(stage *StageStruct, cmap *ast.CommentMap, assig
 
 			switch gongstructName {
 			// insertion point for basic lit assignments
-			case "AnotherDummyData":
+			case "Content":
 				switch fieldName {
 				// insertion point for field dependant code
 				case "Name":
 					// remove first and last char
 					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_AnotherDummyData[identifier].Name = fielValue
-				}
-			case "Cell":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "Name":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_Cell[identifier].Name = fielValue
-				}
-			case "DummyData":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "Name":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_DummyData[identifier].Name = fielValue
-				case "DummyString":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_DummyData[identifier].DummyString = fielValue
-				case "DummyInt":
-					// convert string to int
-					fielValue, err := strconv.ParseInt(basicLit.Value, 10, 64)
-					if err != nil {
-						log.Fatalln(err)
-					}
-					__gong__map_DummyData[identifier].DummyInt = int(exprSign) * int(fielValue)
-				case "DummyFloat":
-					// convert string to float64
-					fielValue, err := strconv.ParseFloat(basicLit.Value, 64)
-					if err != nil {
-						log.Fatalln(err)
-					}
-					__gong__map_DummyData[identifier].DummyFloat = exprSign * fielValue
-				case "DummyDuration":
-					// convert string to duration
-					fielValue, err := strconv.ParseInt(basicLit.Value, 10, 64)
-					if err != nil {
-						log.Fatalln(err)
-					}
-					__gong__map_DummyData[identifier].DummyDuration = time.Duration(int(exprSign) * int(fielValue))
-				}
-			case "Element":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "Name":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_Element[identifier].Name = fielValue
+					__gong__map_Content[identifier].Name = fielValue
 				case "Content":
 					// remove first and last char
 					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_Element[identifier].Content = fielValue
-				}
-			case "MarkdownContent":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "Name":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_MarkdownContent[identifier].Name = fielValue
-				case "Content":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_MarkdownContent[identifier].Content = fielValue
-				}
-			case "Row":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "Name":
-					// remove first and last char
-					fielValue := basicLit.Value[1 : len(basicLit.Value)-1]
-					__gong__map_Row[identifier].Name = fielValue
+					__gong__map_Content[identifier].Content = fielValue
 				}
 			}
 		case *ast.Ident:
@@ -803,40 +637,7 @@ func UnmarshallGongstructStaging(stage *StageStruct, cmap *ast.CommentMap, assig
 			}
 			switch gongstructName {
 			// insertion point for bool & pointers assignments
-			case "AnotherDummyData":
-				switch fieldName {
-				// insertion point for field dependant code
-				}
-			case "Cell":
-				switch fieldName {
-				// insertion point for field dependant code
-				}
-			case "DummyData":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "DummyBool":
-					// convert string to boolean
-					fielValue, err := strconv.ParseBool(ident.Name)
-					if err != nil {
-						log.Fatalln(err)
-					}
-					__gong__map_DummyData[identifier].DummyBool = fielValue
-				case "DummyPointerToGongStruct":
-					targetIdentifier := ident.Name
-					__gong__map_DummyData[identifier].DummyPointerToGongStruct = __gong__map_AnotherDummyData[targetIdentifier]
-				}
-			case "Element":
-				switch fieldName {
-				// insertion point for field dependant code
-				}
-			case "MarkdownContent":
-				switch fieldName {
-				// insertion point for field dependant code
-				case "Root":
-					targetIdentifier := ident.Name
-					__gong__map_MarkdownContent[identifier].Root = __gong__map_Element[targetIdentifier]
-				}
-			case "Row":
+			case "Content":
 				switch fieldName {
 				// insertion point for field dependant code
 				}
@@ -868,48 +669,7 @@ func UnmarshallGongstructStaging(stage *StageStruct, cmap *ast.CommentMap, assig
 				_ = enumValue
 				switch gongstructName {
 				// insertion point for enums assignments
-				case "AnotherDummyData":
-					switch fieldName {
-					// insertion point for enum assign code
-					}
-				case "Cell":
-					switch fieldName {
-					// insertion point for enum assign code
-					}
-				case "DummyData":
-					switch fieldName {
-					// insertion point for enum assign code
-					case "DummyEnumString":
-						var val ElementType
-						err := (&val).FromCodeString(enumValue)
-						if err != nil {
-							log.Fatalln(err)
-						}
-						__gong__map_DummyData[identifier].DummyEnumString = ElementType(val)
-					case "DummyEnumInt":
-						var val DummnyTypeInt
-						err := (&val).FromCodeString(enumValue)
-						if err != nil {
-							log.Fatalln(err)
-						}
-						__gong__map_DummyData[identifier].DummyEnumInt = DummnyTypeInt(val)
-					}
-				case "Element":
-					switch fieldName {
-					// insertion point for enum assign code
-					case "Type":
-						var val ElementType
-						err := (&val).FromCodeString(enumValue)
-						if err != nil {
-							log.Fatalln(err)
-						}
-						__gong__map_Element[identifier].Type = ElementType(val)
-					}
-				case "MarkdownContent":
-					switch fieldName {
-					// insertion point for enum assign code
-					}
-				case "Row":
+				case "Content":
 					switch fieldName {
 					// insertion point for enum assign code
 					}
