@@ -8,7 +8,7 @@ import (
 
 func GenerateMarkdownSample() (res string) {
 	buf := &bytes.Buffer{}
-	md.NewMarkdown(buf).
+	_md := md.NewMarkdown(buf).
 		H1("This is H1").
 		PlainText("This is plain text").
 		H2f("This is %s with text format", "H2").
@@ -45,8 +45,9 @@ func main() {
 			},
 		}).
 		H2("Image").
-		PlainTextf(md.Image("sample_image", "/assets/images/star.svg")).
-		Build()
+		PlainTextf(md.Image("sample_image", "/assets/images/star.svg"))
+
+	_md.Build()
 
 	res = buf.String()
 
