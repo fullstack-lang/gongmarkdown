@@ -18,3 +18,4 @@ go/cmd/gongmarkdown/test.db
 go/cmd/gongmarkdown/__debug_bin
 .DS_Store
 node_modules
+go/cmd/gongmarkdown/__debug_bin*

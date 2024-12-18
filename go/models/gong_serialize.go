@@ -103,8 +103,8 @@ func SerializeExcelize[Type Gongstruct](stage *StageStruct, f *excelize.File) {
 	for instance := range set {
 		line = line + 1
 		for index, fieldName := range GetFields[Type]() {
-			fieldStringValue := GetFieldStringValue(any(*instance).(Type), fieldName)
-			f.SetCellStr(sheetName, fmt.Sprintf("%s%d", IntToLetters(int32(index+1)), line), fieldStringValue)
+			f.SetCellStr(sheetName, fmt.Sprintf("%s%d", IntToLetters(int32(index+1)), line), GetFieldStringValue(
+				any(*instance).(Type), fieldName))
 		}
 	}
 
