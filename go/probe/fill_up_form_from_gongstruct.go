@@ -2,7 +2,7 @@
 package probe
 
 import (
-	gongtable "github.com/fullstack-lang/gongtable/go/models"
+	gongtable "github.com/fullstack-lang/gong/lib/table/go/models"
 
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
@@ -10,13 +10,12 @@ import (
 func FillUpFormFromGongstruct(instance any, probe *Probe) {
 	formStage := probe.formStage
 	formStage.Reset()
-	formStage.Commit()
 
-	FillUpNamedFormFromGongstruct(instance, probe, formStage, gongtable.FormGroupDefaultName.ToString())
+	FillUpNamedFormFromGongstruct(instance, probe, formStage, FormName)
 
 }
 
-func FillUpNamedFormFromGongstruct(instance any, probe *Probe, formStage *gongtable.StageStruct, formName string) {
+func FillUpNamedFormFromGongstruct(instance any, probe *Probe, formStage *gongtable.Stage, formName string) {
 
 	switch instancesTyped := any(instance).(type) {
 	// insertion point

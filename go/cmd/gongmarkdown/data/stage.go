@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/fullstack-lang/gongmarkdown/go/models"
-
 	// injection point for ident package import declaration{{ImportPackageDeclaration}}
 )
 
@@ -12,7 +11,7 @@ import (
 // if there are no elements in the stage to marshall
 var _ time.Time
 
-// Injection point for meta package dummy declaration{{ImportPackageDummyDeclaration}}
+// _ point for meta package dummy declaration{{ImportPackageDummyDeclaration}}
 
 // When parsed, those maps will help with the renaming process
 var _ map[string]any = map[string]any{
@@ -20,9 +19,12 @@ var _ map[string]any = map[string]any{
 }
 
 // function will stage objects
-func _(stage *models.StageStruct) {
+func _(stage *models.Stage) {
 
-	// Declaration of instances to stage
+	const __write__local_time = "2025-07-07 04:11:33.993545 CEST"
+	const __write__utc_time__ = "2025-07-07 02:11:33.993545 UTC"
+
+	const __commitId__ = "0000000003"
 
 	__Content__000000_Dummy := (&models.Content{}).Stage(stage)
 
@@ -49,32 +51,35 @@ This is a **standalone** Angular component using "ngx-markdown"
 # This is H1
 This is plain text
 ## This is H2 with text format
-Text formatting, such as **bold** and *italic*, `code` styles.
+Text formatting, such as **bold** and *italic*, code styles.
 ## Code Block
-```go
-package main
-import "fmt"
 
-func main() {
-	fmt.Println("Hello, World!")
-}
-```
 ## List
+
 - Bullet Item 1
 - Bullet Item 2
 - Bullet Item 3
+
 1. Ordered Item 1
 2. Ordered Item 2
 3. Ordered Item 3
+
 ## CheckBox
-- [ ] `sample code`
+
+- [ ] sample code
 - [x] [Go](https://golang.org)
 - [ ] ~~strikethrough~~
+
 ## Blockquote
+
 > If you can dream it, you can do it.
+
 ### Horizontal Rule
+
 ---
+
 ## Table
+
 | NAME  | AGE | COUNTRY |
 |-------|-----|---------|
 | David |  23 | USA     |
@@ -82,7 +87,7 @@ func main() {
 | Bob   |  25 | Canada  |
 
 ## Image
+
 ![sample_image](/assets/images/star.svg)`
 
-	// Setup of pointers
 }

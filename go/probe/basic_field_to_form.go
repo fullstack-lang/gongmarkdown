@@ -5,13 +5,13 @@ import (
 	"math"
 	"time"
 
-	form "github.com/fullstack-lang/gongtable/go/models"
+	form "github.com/fullstack-lang/gong/lib/table/go/models"
 
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
 
 func BasicFieldtoForm[T models.PointerToGongstruct, TF models.GongtructBasicField](
-	fieldName string, field TF, instance T, formStage *form.StageStruct, formGroup *form.FormGroup,
+	fieldName string, field TF, instance T, formStage *form.Stage, formGroup *form.FormGroup,
 	isTextArea bool, isBespokeWidth bool, bespokeWidth int, isBespokeHeight bool, bespokeHeight int,
 ) {
 

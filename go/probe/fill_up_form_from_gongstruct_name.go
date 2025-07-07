@@ -2,7 +2,7 @@
 package probe
 
 import (
-	form "github.com/fullstack-lang/gongtable/go/models"
+	form "github.com/fullstack-lang/gong/lib/table/go/models"
 
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
@@ -14,7 +14,6 @@ func FillUpFormFromGongstructName(
 ) {
 	formStage := probe.formStage
 	formStage.Reset()
-	formStage.Commit()
 
 	var prefix string
 
@@ -28,7 +27,7 @@ func FillUpFormFromGongstructName(
 	// insertion point
 	case "Content":
 		formGroup := (&form.FormGroup{
-			Name:  form.FormGroupDefaultName.ToString(),
+			Name:  FormName,
 			Label: prefix + "Content Form",
 		}).Stage(formStage)
 		formGroup.OnSave = __gong__New__ContentFormCallback(

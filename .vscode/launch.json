@@ -16,23 +16,14 @@
             "webRoot": "${workspaceFolder}/ng-github.com-fullstack-lang-gongmarkdown"
         },
         {
-            "name": "go server -marshallOnCommit=stage",
+            "name": "go server -unmarshallFromCode=data/stage.go -marshallOnCommit=data/stage",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/go/cmd/gongmarkdown",
             "args": [
-                "-marshallOnCommit=data/stage",
-                "-generateDocument"
-            ]
-        },
-        {
-            "name": "go markdown",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "${workspaceFolder}/go/cmd/gongmarkdown/markdown",
-            "args": [
+                "-unmarshallFromCode=data/stage.go",
+                "-marshallOnCommit=data/stage"
             ]
         },
     ]

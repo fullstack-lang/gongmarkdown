@@ -3,11 +3,10 @@ package probe
 
 import (
 	"fmt"
-	"log"
 
-	gongtable_fullstack "github.com/fullstack-lang/gongtable/go/fullstack"
-	form "github.com/fullstack-lang/gongtable/go/models"
-	gongtable_models "github.com/fullstack-lang/gongtable/go/models"
+	gongtable_fullstack "github.com/fullstack-lang/gong/lib/table/go/fullstack"
+	form "github.com/fullstack-lang/gong/lib/table/go/models"
+	gongtable_models "github.com/fullstack-lang/gong/lib/table/go/models"
 
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
@@ -35,7 +34,7 @@ type OnSortingEditon[InstanceType models.PointerToGongstruct, FieldType models.P
 
 func (onSortingEditon *OnSortingEditon[InstanceType, FieldType]) OnButtonPressed() {
 
-	tableStackName := onSortingEditon.probe.formStage.GetPath() +
+	tableStackName := onSortingEditon.probe.formStage.GetName() +
 		string(form.StackNamePostFixForTableForAssociationSorting)
 
 	// tableStackName supposed to be "test-form-table"
@@ -48,6 +47,7 @@ func (onSortingEditon *OnSortingEditon[InstanceType, FieldType]) OnButtonPressed
 	table.HasPaginator = false
 	table.HasCheckableRows = false
 	table.HasSaveButton = true
+	table.SaveButtonLabel = "Close form"
 	table.CanDragDropRows = true
 
 	for _, fieldName := range models.GetFieldsFromPointer[FieldType]() {
@@ -56,12 +56,30 @@ func (onSortingEditon *OnSortingEditon[InstanceType, FieldType]) OnButtonPressed
 		table.DisplayedColumns = append(table.DisplayedColumns, column)
 	}
 
+	instanceSet := *models.GetGongstructInstancesSetFromPointerType[FieldType](onSortingEditon.probe.stageOfInterest)
+	instanceSlice := make([]FieldType, 0)
+	for instance := range instanceSet {
+		instanceSlice = append(instanceSlice, instance)
+	}
 	map_RowID_instance := make(map[*gongtable_models.Row]FieldType)
-	for _, instance := range *onSortingEditon.field {
+	for instance := range instanceSet {
 		row := new(gongtable_models.Row).Stage(tableStageForSelection)
 		row.Name = instance.GetName()
 		map_RowID_instance[row] = instance
 		table.Rows = append(table.Rows, row)
+
+		cell := (&gongtable_models.Cell{
+			Name: "ID",
+		}).Stage(tableStageForSelection)
+		row.Cells = append(row.Cells, cell)
+		cellInt := (&gongtable_models.CellInt{
+			Name: "ID",
+			Value: int(models.GetOrderPointerGongstruct(
+				onSortingEditon.probe.stageOfInterest,
+				instance,
+			)),
+		}).Stage(tableStageForSelection)
+		cell.CellInt = cellInt
 
 		for _, fieldName := range models.GetFieldsFromPointer[FieldType]() {
 			cell := new(gongtable_models.Cell).Stage(tableStageForSelection)
@@ -77,56 +95,5 @@ func (onSortingEditon *OnSortingEditon[InstanceType, FieldType]) OnButtonPressed
 		}
 	}
 
-	table.Impl = NewTableSortSaver[InstanceType, FieldType](
-		onSortingEditon.instance,
-		onSortingEditon.field,
-		onSortingEditon.probe,
-		&map_RowID_instance)
 	tableStageForSelection.Commit()
-}
-
-func NewTableSortSaver[InstanceType models.PointerToGongstruct, FieldType models.PointerToGongstruct](
-	instance InstanceType,
-	field *[]FieldType,
-	probe *Probe,
-	map_RowID_instance *map[*gongtable_models.Row]FieldType,
-) (tableSortSaver *TableSortSaver[InstanceType, FieldType]) {
-
-	tableSortSaver = new(TableSortSaver[InstanceType, FieldType])
-	tableSortSaver.instance = instance
-	tableSortSaver.field = field
-	tableSortSaver.probe = probe
-	tableSortSaver.map_RowID_instance = map_RowID_instance
-
-	return
-}
-
-type TableSortSaver[InstanceType models.PointerToGongstruct, FieldType models.PointerToGongstruct] struct {
-	instance   InstanceType
-	field      *[]FieldType
-	probe *Probe
-
-	// map giving the relation between the row ID and the instance
-	map_RowID_instance *map[*gongtable_models.Row]FieldType
-}
-
-func (tableSortSaver *TableSortSaver[InstanceType, FieldType]) TableUpdated(stage *form.StageStruct, table, updatedTable *form.Table) {
-	log.Println("TableSortSaver: TableUpdated")
-
-	// checkout to the stage to get the rows that have been checked and not
-	stage.Checkout()
-
-	*tableSortSaver.field = make([]FieldType, 0)
-
-	for _, row := range table.Rows {
-		instance := (*tableSortSaver.map_RowID_instance)[row]
-		*tableSortSaver.field = append(*tableSortSaver.field, instance)
-	}
-	tableSortSaver.probe.stageOfInterest.Commit()
-
-	// see the result
-	fillUpTablePointerToGongstruct[InstanceType](
-		tableSortSaver.probe,
-	)
-	tableSortSaver.probe.tableStage.Commit()
 }

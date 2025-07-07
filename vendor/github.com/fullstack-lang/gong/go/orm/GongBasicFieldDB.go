@@ -79,10 +79,6 @@ type GongBasicFieldDB struct {
 	// Declation for basic field gongbasicfieldDB.Index
 	Index_Data sql.NullInt64
 
-	// Declation for basic field gongbasicfieldDB.IsDocLink
-	// provide the sql storage for the boolan
-	IsDocLink_Data sql.NullBool
-
 	// Declation for basic field gongbasicfieldDB.IsTextArea
 	// provide the sql storage for the boolan
 	IsTextArea_Data sql.NullBool
@@ -133,17 +129,15 @@ type GongBasicFieldWOP struct {
 
 	Index int `xlsx:"5"`
 
-	IsDocLink bool `xlsx:"6"`
+	IsTextArea bool `xlsx:"6"`
 
-	IsTextArea bool `xlsx:"7"`
+	IsBespokeWidth bool `xlsx:"7"`
 
-	IsBespokeWidth bool `xlsx:"8"`
+	BespokeWidth int `xlsx:"8"`
 
-	BespokeWidth int `xlsx:"9"`
+	IsBespokeHeight bool `xlsx:"9"`
 
-	IsBespokeHeight bool `xlsx:"10"`
-
-	BespokeHeight int `xlsx:"11"`
+	BespokeHeight int `xlsx:"10"`
 	// insertion for WOP pointer fields
 }
 
@@ -155,7 +149,6 @@ var GongBasicField_Fields = []string{
 	"DeclaredType",
 	"CompositeStructName",
 	"Index",
-	"IsDocLink",
 	"IsTextArea",
 	"IsBespokeWidth",
 	"BespokeWidth",
@@ -175,10 +168,10 @@ type BackRepoGongBasicFieldStruct struct {
 
 	db db.DBInterface
 
-	stage *models.StageStruct
+	stage *models.Stage
 }
 
-func (backRepoGongBasicField *BackRepoGongBasicFieldStruct) GetStage() (stage *models.StageStruct) {
+func (backRepoGongBasicField *BackRepoGongBasicFieldStruct) GetStage() (stage *models.Stage) {
 	stage = backRepoGongBasicField.stage
 	return
 }
@@ -196,9 +189,19 @@ func (backRepoGongBasicField *BackRepoGongBasicFieldStruct) GetGongBasicFieldDBF
 
 // BackRepoGongBasicField.CommitPhaseOne commits all staged instances of GongBasicField to the BackRepo
 // Phase One is the creation of instance in the database if it is not yet done to get the unique ID for each staged instance
-func (backRepoGongBasicField *BackRepoGongBasicFieldStruct) CommitPhaseOne(stage *models.StageStruct) (Error error) {
+func (backRepoGongBasicField *BackRepoGongBasicFieldStruct) CommitPhaseOne(stage *models.Stage) (Error error) {
 
+	var gongbasicfields []*models.GongBasicField
 	for gongbasicfield := range stage.GongBasicFields {
+		gongbasicfields = append(gongbasicfields, gongbasicfield)
+	}
+
+	// Sort by the order stored in Map_Staged_Order.
+	sort.Slice(gongbasicfields, func(i, j int) bool {
+		return stage.GongBasicFieldMap_Staged_Order[gongbasicfields[i]] < stage.GongBasicFieldMap_Staged_Order[gongbasicfields[j]]
+	})
+
+	for _, gongbasicfield := range gongbasicfields {
 		backRepoGongBasicField.CommitPhaseOneInstance(gongbasicfield)
 	}
 
@@ -412,13 +415,15 @@ func (gongbasicfieldDB *GongBasicFieldDB) DecodePointers(backRepo *BackRepoStruc
 		if id != 0 {
 			tmp, ok := backRepo.BackRepoGongEnum.Map_GongEnumDBID_GongEnumPtr[uint(id)]
 
+			// if the pointer id is unknown, it is not a problem, maybe the target was removed from the front
 			if !ok {
-				log.Fatalln("DecodePointers: gongbasicfield.GongEnum, unknown pointer id", id)
-			}
-
-			// updates only if field has changed
-			if gongbasicfield.GongEnum == nil || gongbasicfield.GongEnum != tmp {
-				gongbasicfield.GongEnum = tmp
+				log.Println("DecodePointers: gongbasicfield.GongEnum, unknown pointer id", id)
+				gongbasicfield.GongEnum = nil
+			} else {
+				// updates only if field has changed
+				if gongbasicfield.GongEnum == nil || gongbasicfield.GongEnum != tmp {
+					gongbasicfield.GongEnum = tmp
+				}
 			}
 		} else {
 			gongbasicfield.GongEnum = nil
@@ -474,9 +479,6 @@ func (gongbasicfieldDB *GongBasicFieldDB) CopyBasicFieldsFromGongBasicField(gong
 	gongbasicfieldDB.Index_Data.Int64 = int64(gongbasicfield.Index)
 	gongbasicfieldDB.Index_Data.Valid = true
 
-	gongbasicfieldDB.IsDocLink_Data.Bool = gongbasicfield.IsDocLink
-	gongbasicfieldDB.IsDocLink_Data.Valid = true
-
 	gongbasicfieldDB.IsTextArea_Data.Bool = gongbasicfield.IsTextArea
 	gongbasicfieldDB.IsTextArea_Data.Valid = true
 
@@ -511,9 +513,6 @@ func (gongbasicfieldDB *GongBasicFieldDB) CopyBasicFieldsFromGongBasicField_WOP(
 
 	gongbasicfieldDB.Index_Data.Int64 = int64(gongbasicfield.Index)
 	gongbasicfieldDB.Index_Data.Valid = true
-
-	gongbasicfieldDB.IsDocLink_Data.Bool = gongbasicfield.IsDocLink
-	gongbasicfieldDB.IsDocLink_Data.Valid = true
 
 	gongbasicfieldDB.IsTextArea_Data.Bool = gongbasicfield.IsTextArea
 	gongbasicfieldDB.IsTextArea_Data.Valid = true
@@ -550,9 +549,6 @@ func (gongbasicfieldDB *GongBasicFieldDB) CopyBasicFieldsFromGongBasicFieldWOP(g
 	gongbasicfieldDB.Index_Data.Int64 = int64(gongbasicfield.Index)
 	gongbasicfieldDB.Index_Data.Valid = true
 
-	gongbasicfieldDB.IsDocLink_Data.Bool = gongbasicfield.IsDocLink
-	gongbasicfieldDB.IsDocLink_Data.Valid = true
-
 	gongbasicfieldDB.IsTextArea_Data.Bool = gongbasicfield.IsTextArea
 	gongbasicfieldDB.IsTextArea_Data.Valid = true
 
@@ -577,7 +573,6 @@ func (gongbasicfieldDB *GongBasicFieldDB) CopyBasicFieldsToGongBasicField(gongba
 	gongbasicfield.DeclaredType = gongbasicfieldDB.DeclaredType_Data.String
 	gongbasicfield.CompositeStructName = gongbasicfieldDB.CompositeStructName_Data.String
 	gongbasicfield.Index = int(gongbasicfieldDB.Index_Data.Int64)
-	gongbasicfield.IsDocLink = gongbasicfieldDB.IsDocLink_Data.Bool
 	gongbasicfield.IsTextArea = gongbasicfieldDB.IsTextArea_Data.Bool
 	gongbasicfield.IsBespokeWidth = gongbasicfieldDB.IsBespokeWidth_Data.Bool
 	gongbasicfield.BespokeWidth = int(gongbasicfieldDB.BespokeWidth_Data.Int64)
@@ -593,7 +588,6 @@ func (gongbasicfieldDB *GongBasicFieldDB) CopyBasicFieldsToGongBasicField_WOP(go
 	gongbasicfield.DeclaredType = gongbasicfieldDB.DeclaredType_Data.String
 	gongbasicfield.CompositeStructName = gongbasicfieldDB.CompositeStructName_Data.String
 	gongbasicfield.Index = int(gongbasicfieldDB.Index_Data.Int64)
-	gongbasicfield.IsDocLink = gongbasicfieldDB.IsDocLink_Data.Bool
 	gongbasicfield.IsTextArea = gongbasicfieldDB.IsTextArea_Data.Bool
 	gongbasicfield.IsBespokeWidth = gongbasicfieldDB.IsBespokeWidth_Data.Bool
 	gongbasicfield.BespokeWidth = int(gongbasicfieldDB.BespokeWidth_Data.Int64)
@@ -610,7 +604,6 @@ func (gongbasicfieldDB *GongBasicFieldDB) CopyBasicFieldsToGongBasicFieldWOP(gon
 	gongbasicfield.DeclaredType = gongbasicfieldDB.DeclaredType_Data.String
 	gongbasicfield.CompositeStructName = gongbasicfieldDB.CompositeStructName_Data.String
 	gongbasicfield.Index = int(gongbasicfieldDB.Index_Data.Int64)
-	gongbasicfield.IsDocLink = gongbasicfieldDB.IsDocLink_Data.Bool
 	gongbasicfield.IsTextArea = gongbasicfieldDB.IsTextArea_Data.Bool
 	gongbasicfield.IsBespokeWidth = gongbasicfieldDB.IsBespokeWidth_Data.Bool
 	gongbasicfield.BespokeWidth = int(gongbasicfieldDB.BespokeWidth_Data.Int64)

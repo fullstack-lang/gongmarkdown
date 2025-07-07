@@ -130,10 +130,10 @@ type BackRepoPointerToGongStructFieldStruct struct {
 
 	db db.DBInterface
 
-	stage *models.StageStruct
+	stage *models.Stage
 }
 
-func (backRepoPointerToGongStructField *BackRepoPointerToGongStructFieldStruct) GetStage() (stage *models.StageStruct) {
+func (backRepoPointerToGongStructField *BackRepoPointerToGongStructFieldStruct) GetStage() (stage *models.Stage) {
 	stage = backRepoPointerToGongStructField.stage
 	return
 }
@@ -151,9 +151,19 @@ func (backRepoPointerToGongStructField *BackRepoPointerToGongStructFieldStruct) 
 
 // BackRepoPointerToGongStructField.CommitPhaseOne commits all staged instances of PointerToGongStructField to the BackRepo
 // Phase One is the creation of instance in the database if it is not yet done to get the unique ID for each staged instance
-func (backRepoPointerToGongStructField *BackRepoPointerToGongStructFieldStruct) CommitPhaseOne(stage *models.StageStruct) (Error error) {
+func (backRepoPointerToGongStructField *BackRepoPointerToGongStructFieldStruct) CommitPhaseOne(stage *models.Stage) (Error error) {
 
+	var pointertogongstructfields []*models.PointerToGongStructField
 	for pointertogongstructfield := range stage.PointerToGongStructFields {
+		pointertogongstructfields = append(pointertogongstructfields, pointertogongstructfield)
+	}
+
+	// Sort by the order stored in Map_Staged_Order.
+	sort.Slice(pointertogongstructfields, func(i, j int) bool {
+		return stage.PointerToGongStructFieldMap_Staged_Order[pointertogongstructfields[i]] < stage.PointerToGongStructFieldMap_Staged_Order[pointertogongstructfields[j]]
+	})
+
+	for _, pointertogongstructfield := range pointertogongstructfields {
 		backRepoPointerToGongStructField.CommitPhaseOneInstance(pointertogongstructfield)
 	}
 
@@ -367,13 +377,15 @@ func (pointertogongstructfieldDB *PointerToGongStructFieldDB) DecodePointers(bac
 		if id != 0 {
 			tmp, ok := backRepo.BackRepoGongStruct.Map_GongStructDBID_GongStructPtr[uint(id)]
 
+			// if the pointer id is unknown, it is not a problem, maybe the target was removed from the front
 			if !ok {
-				log.Fatalln("DecodePointers: pointertogongstructfield.GongStruct, unknown pointer id", id)
-			}
-
-			// updates only if field has changed
-			if pointertogongstructfield.GongStruct == nil || pointertogongstructfield.GongStruct != tmp {
-				pointertogongstructfield.GongStruct = tmp
+				log.Println("DecodePointers: pointertogongstructfield.GongStruct, unknown pointer id", id)
+				pointertogongstructfield.GongStruct = nil
+			} else {
+				// updates only if field has changed
+				if pointertogongstructfield.GongStruct == nil || pointertogongstructfield.GongStruct != tmp {
+					pointertogongstructfield.GongStruct = tmp
+				}
 			}
 		} else {
 			pointertogongstructfield.GongStruct = nil

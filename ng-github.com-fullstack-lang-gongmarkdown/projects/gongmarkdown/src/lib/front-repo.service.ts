@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core'
 import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http'
 
 import { Observable, combineLatest, BehaviorSubject, of } from 'rxjs'
+import { shareReplay } from 'rxjs/operators'
 
 // insertion point sub template for services imports
 import { ContentAPI } from './content-api'
@@ -19,6 +20,8 @@ export class FrontRepo { // insertion point sub template
 	map_ID_Content = new Map<number, Content>() // map of front instances
 
 
+	public GONG__Index = -1
+
 	// getFrontArray allows for a get function that is robust to refactoring of the named struct name
 	// for instance frontRepo.getArray<Astruct>( Astruct.GONGSTRUCT_NAME), is robust to a refactoring of Astruct identifier
 	// contrary to frontRepo.Astructs_array which is not refactored when Astruct identifier is modified
@@ -28,7 +31,7 @@ export class FrontRepo { // insertion point sub template
 			case 'Content':
 				return this.array_Contents as unknown as Array<Type>
 			default:
-				throw new Error("Type not recognized");
+				throw new Error("Type not recognized")
 		}
 	}
 
@@ -38,7 +41,7 @@ export class FrontRepo { // insertion point sub template
 			case 'Content':
 				return this.map_ID_Content as unknown as Map<number, Type>
 			default:
-				throw new Error("Type not recognized");
+				throw new Error("Type not recognized")
 		}
 	}
 }
@@ -74,7 +77,7 @@ export class DialogData {
 	IntermediateStructField: string = "" // the "Bclass" as field
 	NextAssociationStruct: string = "" // the "Bclass"
 
-	GONG__StackPath: string = ""
+	Name: string = ""
 }
 
 export enum SelectionMode {
@@ -90,17 +93,20 @@ export enum SelectionMode {
 })
 export class FrontRepoService {
 
-	GONG__StackPath: string = ""
-	private socket: WebSocket | undefined
+	Name: string = ""
 
 	httpOptions = {
 		headers: new HttpHeaders({ 'Content-Type': 'application/json' })
-	};
+	}
 
 	//
 	// Store of all instances of the stack
 	//
 	frontRepo = new (FrontRepo)
+
+	// Manage open WebSocket connections
+	private webSocketConnections = new Map<string, Observable<FrontRepo>>()
+
 
 	constructor(
 		private http: HttpClient, // insertion point sub template 
@@ -117,7 +123,7 @@ export class FrontRepoService {
 				let behaviorSubject = instanceToBePosted[(structName + "ServiceChanged") as keyof typeof instanceToBePosted] as unknown as BehaviorSubject<string>
 				behaviorSubject.next("post")
 			}
-		);
+		)
 	}
 
 	// deleteService provides a delete function for each struct name
@@ -130,26 +136,15 @@ export class FrontRepoService {
 				let behaviorSubject = instanceToBeDeleted[(structName + "ServiceChanged") as keyof typeof instanceToBeDeleted] as unknown as BehaviorSubject<string>
 				behaviorSubject.next("delete")
 			}
-		);
+		)
 	}
 
 	// typing of observable can be messy in typescript. Therefore, one force the type
-	observableFrontRepo: [
+	observableFrontRepo!: [
 		Observable<null>, // see below for the of(null) observable
 		// insertion point sub template 
 		Observable<ContentAPI[]>,
-	] = [
-			// Using "combineLatest" with a placeholder observable.
-			//
-			// This allows the typescript compiler to pass when no GongStruct is present in the front API
-			//
-			// The "of(null)" is a "meaningless" observable that emits a single value (null) and completes.
-			// This is used as a workaround to satisfy TypeScript requirements and the "combineLatest" 
-			// expectation for a non-empty array of observables.
-			of(null), // 
-			// insertion point sub template
-			this.contentService.getContents(this.GONG__StackPath, this.frontRepo),
-		];
+	]
 
 	//
 	// pull performs a GET on all struct of the stack and redeem association pointers 
@@ -157,14 +152,14 @@ export class FrontRepoService {
 	// This is an observable. Therefore, the control flow forks with
 	// - pull() return immediatly the observable
 	// - the observable observer, if it subscribe, is called when all GET calls are performs
-	pull(GONG__StackPath: string = ""): Observable<FrontRepo> {
+	pull(Name: string = ""): Observable<FrontRepo> {
 
-		this.GONG__StackPath = GONG__StackPath
+		this.Name = Name
 
 		this.observableFrontRepo = [
 			of(null), // see above for justification
 			// insertion point sub template
-			this.contentService.getContents(this.GONG__StackPath, this.frontRepo),
+			this.contentService.getContents(this.Name, this.frontRepo),
 		]
 
 		return new Observable<FrontRepo>(
@@ -219,24 +214,38 @@ export class FrontRepoService {
 		)
 	}
 
-	public connectToWebSocket(GONG__StackPath: string): Observable<FrontRepo> {
+	public connectToWebSocket(Name: string): Observable<FrontRepo> {
 
-		this.GONG__StackPath = GONG__StackPath
+		// Check if a connection for this name already exists
+		if (this.webSocketConnections.has(Name)) {
+			return this.webSocketConnections.get(Name)!
+		}
 
+		//
+		// Create a new connection
+		//
+		let host = window.location.host
+		const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 
-		let params = new HttpParams().set("GONG__StackPath", this.GONG__StackPath)
-		let basePath = 'ws://localhost:8080/api/github.com/fullstack-lang/gongmarkdown/go/v1/ws/stage'
+		if (host === 'localhost:4200') {
+			host = 'localhost:8080'
+		}
+
+		// Construct the base path using the dynamic host and protocol
+		// The API path remains the same.
+		let basePath = `${protocol}//${host}/api/github.com/fullstack-lang/gongmarkdown/go/v1/ws/stage`
+
+		let params = new HttpParams().set("Name", Name)
 		let paramString = params.toString()
 		let url = `${basePath}?${paramString}`
-		this.socket = new WebSocket(url)
 
-		return new Observable(observer => {
-			this.socket!.onmessage = event => {
+		const newConnection$ = new Observable<FrontRepo>(observer => {
+			const socket = new WebSocket(url)
 
-
+			socket.onmessage = event => {
 				const backRepoData = new BackRepoData(JSON.parse(event.data))
-
-				let frontRepo = new (FrontRepo)
+				let frontRepo = new (FrontRepo)()
+				frontRepo.GONG__Index = backRepoData.GONG__Index
 
 				// 
 				// First Step: init map of instances
@@ -270,20 +279,29 @@ export class FrontRepoService {
 				)
 
 
-
 				observer.next(frontRepo)
 			}
-			this.socket!.onerror = event => {
-				observer.error(event)
-			}
-			this.socket!.onclose = event => {
-				observer.complete()
-			}
 
+			socket.onerror = event => observer.error(event)
+			socket.onclose = () => observer.complete()
+
+			// Teardown logic: Called when the last subscriber unsubscribes.
 			return () => {
-				this.socket!.close()
+				this.webSocketConnections.delete(Name) // Remove from cache
+				socket.close()
 			}
-		})
+		}).pipe(
+			// This is the key:
+			// - shareReplay makes this a "multicast" observable, sharing the single WebSocket among subscribers.
+			// - { bufferSize: 1, refCount: true } means:
+			//   - bufferSize: 1 => new subscribers get the last emitted value immediately.
+			//   - refCount: true => the connection starts with the first subscriber and stops with the last.
+			shareReplay({ bufferSize: 1, refCount: true })
+		)
+
+		// Store the new connection observable in the map
+		this.webSocketConnections.set(Name, newConnection$)
+		return newConnection$
 	}
 }
 

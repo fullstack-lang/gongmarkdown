@@ -2,10 +2,11 @@ package models
 
 import "go/ast"
 
-func checkFunctionSignature(file *ast.File, modelPkg *ModelPkg) bool {
+func checkFunctionSignature(file *ast.File, modelPkg *ModelPkg) {
 	targetFuncName := "OnAfterUpdate"
 
-	for _, decl := range file.Decls {
+	for i, decl := range file.Decls {
+		_ = i
 		funcDecl, ok := decl.(*ast.FuncDecl)
 		if !ok {
 			continue
@@ -39,13 +40,11 @@ func checkFunctionSignature(file *ast.File, modelPkg *ModelPkg) bool {
 			param1 := params[0].Type.(*ast.StarExpr)
 			param2 := params[1].Type.(*ast.StarExpr)
 
-			if param1.X.(*ast.Ident).Name == "StageStruct" &&
+			if param1.X.(*ast.Ident).Name == "Stage" &&
 				param2.X.(*ast.Ident).Name == gongstruct.Name {
 
 				gongstruct.HasOnAfterUpdateSignature = true
-				return true
 			}
 		}
 	}
-	return false
 }

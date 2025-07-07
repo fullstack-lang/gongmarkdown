@@ -2,10 +2,9 @@
 package probe
 
 import (
-	"log"
 	"time"
 
-	form "github.com/fullstack-lang/gongtable/go/models"
+	form "github.com/fullstack-lang/gong/lib/table/go/models"
 
 	"github.com/fullstack-lang/gongmarkdown/go/models"
 )
@@ -49,7 +48,7 @@ func FormDivBasicFieldToField[TF models.GongtructBasicField](field *TF, formDiv 
 				time.Duration(minutes)*time.Minute +
 				time.Duration(seconds)*time.Second
 
-		if !isNeg {
+		if isNeg {
 			*fieldWithInterferedType = -*fieldWithInterferedType
 		}
 
@@ -59,7 +58,7 @@ func FormDivBasicFieldToField[TF models.GongtructBasicField](field *TF, formDiv 
 func FormDivEnumStringFieldToField[TF models.PointerToGongstructEnumStringField](field TF, formDiv *form.FormDiv) {
 	if value := formDiv.FormFields[0].FormFieldSelect.Value; value != nil {
 		if err := (field).FromCodeString(value.GetName()); err != nil {
-			log.Println("Unkwnown enum value", value.GetName())
+			// log.Println("Unkwnown enum value", value.GetName())
 		}
 	}
 }
@@ -67,12 +66,12 @@ func FormDivEnumStringFieldToField[TF models.PointerToGongstructEnumStringField]
 func FormDivEnumIntFieldToField[TF models.PointerToGongstructEnumIntField](field TF, formDiv *form.FormDiv) {
 	if value := formDiv.FormFields[0].FormFieldSelect.Value; value != nil {
 		if err := (field).FromCodeString(value.GetName()); err != nil {
-			log.Println("Unkwnown enum value", value.GetName())
+			// log.Println("Unkwnown enum value", value.GetName())
 		}
 	}
 }
 
-func FormDivSelectFieldToField[TF models.PointerToGongstruct](field *TF, stageOfInterest *models.StageStruct, formDiv *form.FormDiv) {
+func FormDivSelectFieldToField[TF models.PointerToGongstruct](field *TF, stageOfInterest *models.Stage, formDiv *form.FormDiv) {
 
 	if formDiv.FormFields[0].FormFieldSelect.Value == nil {
 		var zero TF

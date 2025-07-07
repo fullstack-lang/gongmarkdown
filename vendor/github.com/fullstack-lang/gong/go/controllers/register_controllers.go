@@ -3,9 +3,16 @@ package controllers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fullstack-lang/gong/go/orm"
@@ -166,10 +173,45 @@ func (controller *Controller) onWebSocketRequestForBackRepoContent(c *gin.Contex
 
 	// Upgrader specifies parameters for upgrading an HTTP connection to a
 	// WebSocket connection.
+
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
-			return origin == "http://localhost:8080" || origin == "http://localhost:4200"
+			if origin == "" {
+				log.Printf("CheckOrigin: Rejected - Origin header is empty. Request from: %s", r.RemoteAddr)
+				return false // Or handle as per your security policy
+			}
+
+			u, err := url.Parse(origin)
+			if err != nil {
+				log.Printf("CheckOrigin: Rejected - Invalid Origin URL '%s'. Error: %v", origin, err)
+				return false // Invalid URL
+			}
+
+			portStr := u.Port()
+
+			if portStr == "" {
+				// If no port is specified, it might be using default HTTP/HTTPS ports.
+				// For this specific request, we'll assume a port must be present.
+				log.Printf("CheckOrigin: Rejected - No port specified in Origin URL '%s'", origin)
+				return false
+			}
+
+			port, err := strconv.Atoi(portStr)
+			if err != nil {
+				log.Printf("CheckOrigin: Rejected - Port '%s' in Origin URL '%s' is not a valid number. Error: %v", portStr, origin, err)
+				return false // Port is not a valid number
+			}
+
+			// Check if the port is 4200 OR in the range 8000-9000
+			allowed := port == 4200 || (port >= 8000 && port <= 9000)
+			if !allowed {
+				log.Printf("CheckOrigin: Rejected - Port %d from Origin '%s' is not in the allowed list (4200 or 8000-9000)", port, origin)
+				return false
+			}
+
+			// log.Printf("CheckOrigin: Accepted - Origin '%s' with port %d", origin, port)
+			return true
 		},
 	}
 
@@ -187,22 +229,26 @@ func (controller *Controller) onWebSocketRequestForBackRepoContent(c *gin.Contex
 	values := c.Request.URL.Query()
 	stackPath := ""
 	if len(values) == 1 {
-		value := values["GONG__StackPath"]
+		value := values["Name"]
 		if len(value) == 1 {
 			stackPath = value[0]
-			// log.Println("GetLastCommitFromBackNb", "GONG__StackPath", stackPath)
+			// log.Println("GetLastCommitFromBackNb", "Name", stackPath)
 		}
 	}
 
-	log.Printf("Stack github.com/fullstack-lang/gong/go: stack path: '%s', new ws index %d",
-		stackPath, controller.listenerIndex,
-	)
 	index := controller.listenerIndex
 	controller.listenerIndex++
 
 	backRepo := controller.Map_BackRepos[stackPath]
 	if backRepo == nil {
-		log.Panic("Stack github.com/fullstack-lang/gong/go, Unkown stack", stackPath)
+		message := "WebSocket Connect, Stack github.com/fullstack-lang/gong/go, Unkown stack: \"" + stackPath + "\"\n"
+
+		message += "Availabe stack names are:\n"
+		for k := range controller.Map_BackRepos {
+			message += k + "\n"
+		}
+
+		log.Panic(message)
 	}
 	updateCommitBackRepoNbChannel := backRepo.SubscribeToCommitNb(ctx)
 
@@ -221,15 +267,51 @@ func (controller *Controller) onWebSocketRequestForBackRepoContent(c *gin.Contex
 
 	backRepoData := new(orm.BackRepoData)
 	orm.CopyBackRepoToBackRepoData(backRepo, backRepoData)
+	backRepoData.GONG__Index = index
 
-	err = wsConnection.WriteJSON(backRepoData)
+	refresh := 0
+	// Marshal the data to JSON first to be able to get its size
+	jsonData, err := json.Marshal(backRepoData)
+	if err != nil {
+		log.Printf("Error marshaling JSON: %v", err)
+		return
+	}
+
+	// Get the size of the JSON data in bytes
+	jsonSize := len(jsonData)
+
+    // Calculate the full SHA-256 hash
+    fullHash := sha256.Sum256(jsonData)
+
+    // Use the first 12 characters for a shorter, yet highly unique, signature
+    shortHash := hex.EncodeToString(fullHash[:])[0:12]
+
+	// Use WriteMessage to send the pre-marshaled JSON data.
+	// websocket.TextMessage is typically what WriteJSON uses.
+	err = wsConnection.WriteMessage(websocket.TextMessage, jsonData)
 	if err != nil {
 		log.Println("github.com/fullstack-lang/gong/go:\n",
 			"client no longer receiver web socket message, assuming it is no longer alive, closing websocket handler")
 		fmt.Println(err)
 		return
 	} else {
-		log.Println(time.Now().Format("2006-01-02 15:04:05.000000"), "github.com/fullstack-lang/gong/go: 1st sent backRepoData of stack:", stackPath, "index", index)
+		// 1. Extract the component name from the long path for cleaner logs
+		// For example, "github.com/fullstack-lang/gong/lib/table/go" becomes "table"
+		parts := strings.Split("github.com/fullstack-lang/gong/go", "/") // Assuming goFilePath holds the path
+		component := "unknown"
+		if len(parts) > 2 {
+			component = parts[len(parts)-2]
+		}
+
+		// 2. Use a single, formatted log line
+		log.Printf(
+			"%-12s | %-85s | Idx: %d | Size: %-9s | Hash: %s",
+			component,
+			stackPath,
+			index,
+			formatBytes(jsonSize),
+			shortHash,
+		)
 	}
 	for {
 		select {
@@ -239,27 +321,79 @@ func (controller *Controller) onWebSocketRequestForBackRepoContent(c *gin.Contex
 		default:
 			for nbCommitBackRepo := range updateCommitBackRepoNbChannel {
 				_ = nbCommitBackRepo
+				refresh += 1
 
 				backRepoData := new(orm.BackRepoData)
 				orm.CopyBackRepoToBackRepoData(backRepo, backRepoData)
+				backRepoData.GONG__Index = index
 
 				// Set write deadline to prevent blocking indefinitely
 				wsConnection.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
 				// Send backRepo data
-				err = wsConnection.WriteJSON(backRepoData)
+				// Marshal the data to JSON first to be able to get its size
+				jsonData, err := json.Marshal(backRepoData)
 				if err != nil {
-					log.Println("github.com/fullstack-lang/gong/go:\n", stackPath,
-						"client no longer receiver web socket message,closing websocket handler")
+					log.Printf("Error marshaling JSON: %v", err)
+					return
+				}
+
+				// Get the size of the JSON data in bytes
+				jsonSize := len(jsonData)
+
+				// Calculate the full SHA-256 hash
+				fullHash := sha256.Sum256(jsonData)
+
+				// Use the first 12 characters for a shorter, yet highly unique, signature
+				shortHash := hex.EncodeToString(fullHash[:])[0:12]
+
+				// Use WriteMessage to send the pre-marshaled JSON data.
+				// websocket.TextMessage is typically what WriteJSON uses.
+				err = wsConnection.WriteMessage(websocket.TextMessage, jsonData)
+				if err != nil {
+					log.Println("github.com/fullstack-lang/gong/go:\n",
+						"client no longer receiver web socket message, assuming it is no longer alive, closing websocket handler")
 					fmt.Println(err)
-					cancel() // Cancel the context
 					return
 				} else {
-					log.Println(time.Now().Format("2006-01-02 15:04:05.000000"), "github.com/fullstack-lang/gong/go: sent backRepoData of stack:", stackPath, "index", index)
+					// 1. Extract the component name from the long path for cleaner logs
+					// For example, "github.com/fullstack-lang/gong/lib/table/go" becomes "table"
+					parts := strings.Split("github.com/fullstack-lang/gong/go", "/") // Assuming goFilePath holds the path
+					component := "unknown"
+					if len(parts) > 2 {
+						component = parts[len(parts)-2]
+					}
+
+					// 2. Use a single, formatted log line
+					log.Printf(
+						"%-12s | %-85s | Idx: %d | Size: %-9s | Hash: %s",
+						component,
+						stackPath,
+						index,
+						formatBytes(jsonSize),
+						shortHash,
+					)
 				}
 			}
 		}
 	}
+}
+
+// formatBytes converts a size in bytes to a human-readable string (KB, MB, GB).
+func formatBytes(size int) string {
+    if size < 1024 {
+        return fmt.Sprintf("%d B", size)
+    }
+    sizeInKB := float64(size) / 1024.0
+    if sizeInKB < 1024.0 {
+        // For KB, show one decimal place if it's not a whole number
+        if math.Mod(sizeInKB, 1.0) == 0 {
+            return fmt.Sprintf("%.0f KB", sizeInKB)
+        }
+        return fmt.Sprintf("%.1f KB", sizeInKB)
+    }
+    sizeInMB := sizeInKB / 1024.0
+    return fmt.Sprintf("%.2f MB", sizeInMB)
 }
 
 // swagger:route GET /commitfrombacknb backrepo GetLastCommitFromBackNb
@@ -267,15 +401,22 @@ func (controller *Controller) GetLastCommitFromBackNb(c *gin.Context) {
 	values := c.Request.URL.Query()
 	stackPath := ""
 	if len(values) == 1 {
-		value := values["GONG__StackPath"]
+		value := values["Name"]
 		if len(value) == 1 {
 			stackPath = value[0]
-			// log.Println("GetLastCommitFromBackNb", "GONG__StackPath", stackPath)
+			// log.Println("GetLastCommitFromBackNb", "Name", stackPath)
 		}
 	}
 	backRepo := controller.Map_BackRepos[stackPath]
 	if backRepo == nil {
-		log.Panic("Stack github.com/fullstack-lang/gong/go/models, Unkown stack", stackPath)
+		message := "Stack github.com/fullstack-lang/gong/go, Unkown stack: \"" + stackPath + "\"\n"
+
+		message += "Availabe stack names are:\n"
+		for k := range controller.Map_BackRepos {
+			message += k + "\n"
+		}
+
+		log.Panic(message)
 	}
 	res := backRepo.GetLastCommitFromBackNb()
 
@@ -287,15 +428,22 @@ func (controller *Controller) GetLastPushFromFrontNb(c *gin.Context) {
 	values := c.Request.URL.Query()
 	stackPath := ""
 	if len(values) == 1 {
-		value := values["GONG__StackPath"]
+		value := values["Name"]
 		if len(value) == 1 {
 			stackPath = value[0]
-			// log.Println("GetLastPushFromFrontNb", "GONG__StackPath", stackPath)
+			// log.Println("GetLastPushFromFrontNb", "Name", stackPath)
 		}
 	}
 	backRepo := controller.Map_BackRepos[stackPath]
 	if backRepo == nil {
-		log.Panic("Stack github.com/fullstack-lang/gong/go/models, Unkown stack", stackPath)
+		message := "GET Stack github.com/fullstack-lang/gong/go, Unkown stack: \"" + stackPath + "\"\n"
+
+		message += "Availabe stack names are:\n"
+		for k := range controller.Map_BackRepos {
+			message += k + "\n"
+		}
+
+		log.Panic(message)
 	}
 	res := backRepo.GetLastPushFromFrontNb()
 

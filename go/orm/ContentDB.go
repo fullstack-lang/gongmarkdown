@@ -113,10 +113,10 @@ type BackRepoContentStruct struct {
 
 	db db.DBInterface
 
-	stage *models.StageStruct
+	stage *models.Stage
 }
 
-func (backRepoContent *BackRepoContentStruct) GetStage() (stage *models.StageStruct) {
+func (backRepoContent *BackRepoContentStruct) GetStage() (stage *models.Stage) {
 	stage = backRepoContent.stage
 	return
 }
@@ -134,9 +134,19 @@ func (backRepoContent *BackRepoContentStruct) GetContentDBFromContentPtr(content
 
 // BackRepoContent.CommitPhaseOne commits all staged instances of Content to the BackRepo
 // Phase One is the creation of instance in the database if it is not yet done to get the unique ID for each staged instance
-func (backRepoContent *BackRepoContentStruct) CommitPhaseOne(stage *models.StageStruct) (Error error) {
+func (backRepoContent *BackRepoContentStruct) CommitPhaseOne(stage *models.Stage) (Error error) {
 
+	var contents []*models.Content
 	for content := range stage.Contents {
+		contents = append(contents, content)
+	}
+
+	// Sort by the order stored in Map_Staged_Order.
+	sort.Slice(contents, func(i, j int) bool {
+		return stage.ContentMap_Staged_Order[contents[i]] < stage.ContentMap_Staged_Order[contents[j]]
+	})
+
+	for _, content := range contents {
 		backRepoContent.CommitPhaseOneInstance(content)
 	}
 
